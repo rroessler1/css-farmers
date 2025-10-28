@@ -98,7 +98,7 @@ class TestFarmerAgent(unittest.TestCase):
             height=3,
             min_farm_size=50,
             max_farm_size=50,
-            min_willingness=0.0,  # Very low willingness - should build plant
+            min_willingness=0.0,  # Very low threshold - easier to build plant
             max_willingness=0.1,
             biogas_payment=100.0
         )
@@ -110,8 +110,8 @@ class TestFarmerAgent(unittest.TestCase):
         # Run model for a few steps
         for _ in range(10):
             self.model.step()
-        # With low willingness and decent farm size, farmer should build plant
-        # (though it depends on decision algorithm)
+        # With low willingness threshold and decent farm size, farmer is likely to build plant
+        # (decision_score >= willingness threshold means they build)
         self.assertTrue(isinstance(self.farmer.has_biogas_plant, bool))
     
     def test_farmer_receives_payment(self):
