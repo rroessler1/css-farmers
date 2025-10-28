@@ -27,6 +27,27 @@ Run the simulation with default parameters:
 python run.py
 ```
 
+### Interactive Visualization
+
+Run the interactive web-based visualization server:
+
+```bash
+solara run server.py
+```
+
+Then open your browser to http://localhost:8765 to see the model in action with:
+- Real-time grid visualization (green circles = farmers with plants, brown = farmers without)
+- Interactive parameter sliders
+- Real-time charts tracking adoption and payments
+
+### Running Tests
+
+Run the unit tests:
+
+```bash
+python -m unittest test_model.py -v
+```
+
 ## Model Components
 
 ### Agents
@@ -102,6 +123,8 @@ Agent-level data includes:
 - `agents.py`: Agent class definitions (Farmer and BiogasPlant)
 - `model.py`: Main model class (FarmerBiogasModel)
 - `run.py`: Example script to run the simulation
+- `server.py`: Interactive visualization server using Mesa's Solara interface
+- `test_model.py`: Unit tests for the model
 - `requirements.txt`: Python dependencies
 
 ## License
