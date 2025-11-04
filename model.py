@@ -28,7 +28,6 @@ class FarmerBiogasModel(Model):
         max_willingness=0.9,
         plant_cost=700.0,
         biogas_payment=0.10,
-        neighbor_influence=10,
     ):
         """
         Initialize the FarmerBiogasModel.
@@ -48,7 +47,6 @@ class FarmerBiogasModel(Model):
         self.height = height
         self.plant_cost = plant_cost
         self.biogas_payment = biogas_payment
-        self.neighbor_influence = neighbor_influence
 
         # Create grid
         self.grid = MultiGrid(width, height, torus=False)
@@ -61,7 +59,7 @@ class FarmerBiogasModel(Model):
                 willingness = random.uniform(min_willingness, max_willingness)
 
                 # Create farmer agent
-                farmer = Farmer(self, farm_size, willingness)
+                farmer = Farmer(self, farm_size, willingness, willingness)
 
                 # Place farmer on grid
                 self.grid.place_agent(farmer, (i, j))
@@ -84,8 +82,8 @@ class FarmerBiogasModel(Model):
             },
             agent_reporters={
                 "Farm Size": lambda a: a.farm_size if isinstance(a, Farmer) else None,
-                "Willingness": lambda a: (
-                    a.willingness if isinstance(a, Farmer) else None
+                "Willingness to Contribute": lambda a: (
+                    a.willingness_to_contribute if isinstance(a, Farmer) else None
                 ),
                 "Has Plant": lambda a: (
                     a.has_biogas_plant if isinstance(a, Farmer) else None

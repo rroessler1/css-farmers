@@ -21,25 +21,30 @@ def agent_portrayal(agent):
         dict: Portrayal properties for the agent
     """
     if isinstance(agent, Farmer):
-        portrayal = {
-            "size": 50,
-            "color": (
-                "green"
-                if agent.has_biogas_plant
-                else "yellow" if agent.contributes_to_biogas_plant else "brown"
-            ),
-            "shape": "circle",
-            "layer": 0,
-        }
-        # Size based on farm size
-        portrayal["size"] = 30 + (agent.farm_size / 5)
-        return portrayal
-    elif isinstance(agent, BiogasPlant):
+        if agent.has_biogas_plant:
+            return {
+                "size": 60,
+                "color": "blue",
+                "marker": "s",
+            }
+        else:
+            portrayal = {
+                "size": 50,
+                "color": (
+                    "green"
+                    if agent.has_biogas_plant
+                    else "yellow" if agent.contributes_to_biogas_plant else "brown"
+                ),
+                "marker": "o",
+            }
+            # Size based on farm size
+            portrayal["size"] = 30 + (agent.farm_size / 5)
+            return portrayal
+    if isinstance(agent, BiogasPlant):
         return {
             "size": 60,
             "color": "blue",
-            "shape": "rect",
-            "layer": 1,
+            "marker": "s",
         }
     return {}
 

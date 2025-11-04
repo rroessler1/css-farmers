@@ -2,6 +2,7 @@
 Agent classes for the farmer-biogas ABM.
 """
 
+from enum import Enum
 from mesa import Agent
 
 
@@ -15,7 +16,9 @@ class Farmer(Agent):
     - Personal willingness
     """
 
-    def __init__(self, model, farm_size, willingness):
+    def __init__(
+        self, model, farm_size, willingness_to_build, willingness_to_contribute
+    ):
         """
         Initialize a Farmer agent.
 
@@ -26,10 +29,10 @@ class Farmer(Agent):
         """
         super().__init__(model)
         self.farm_size = farm_size
-        self.willingness = willingness
+        self.willingness_to_build = willingness_to_build
+        self.willingness_to_contribute = willingness_to_contribute
         self.has_biogas_plant = False
         self.contributes_to_biogas_plant = False
-        self.influence = 0
         self.money_received = 0.0
 
     def step(self):
@@ -45,49 +48,75 @@ class Farmer(Agent):
         if not self.contributes_to_biogas_plant:
             self._decide_whether_to_build_biogas_plant()
 
-        # Receive payment if biogas plant exists
-        if self.has_biogas_plant:
-            self.money_received += self.model.biogas_payment
-
-        if self.contributes_to_biogas_plant:
-            self.influence += self.model.neighbor_influence
-
     def _decide_whether_to_build_biogas_plant(self):
-        """
-        Calculate a decision score based on farm characteristics.
+        if self.willingness_to_build < 0.5:
+            return
+        if self.contributes_to_biogas_plant:
+            return
 
-        Returns:
-            float: Decision score between 0.0 and 1.0
-        """
-        # Get neighboring farmers
         if self.model.grid:
             neighbors = self.model.grid.get_neighbors(
-                self.pos, moore=True, include_center=False
+                self.pos,
+                moore=True,
+                include_center=False,
+                radius=1,  # can increase if needed
             )
+            contributing_neighbors = get_neighbors_willing_to_contribute(neighbors)
+            available_lsus = get_available_LSUs(contributing_neighbors) + self.farm_size
 
-            # Count neighboring farmers and their average farm size
-            farmer_neighbors = [n for n in neighbors if isinstance(n, Farmer)]
-            if farmer_neighbors:
-                total_contributions = sum(
-                    f.farm_size
-                    for f in farmer_neighbors
-                    if not f.contributes_to_biogas_plant
+            # As per the paper, we only use the largest farms if we have excess capacity
+            if available_lsus > BiogasPlant.MAX_SIZE:
+                contributing_neighbors = sorted(
+                    contributing_neighbors, key=lambda x: x.farm_size, reverse=True
                 )
-                total_influence = sum(
-                    f.influence
-                    for f in farmer_neighbors
-                    if f.contributes_to_biogas_plant
-                )
-                if (
-                    total_contributions
-                    + total_influence
-                    + self.model.biogas_payment * 1000
-                    > self.model.plant_cost
-                ):
-                    for f in farmer_neighbors:
-                        f.contributes_to_biogas_plant = True
-                    self.contributes_to_biogas_plant = True
-                    self.has_biogas_plant = True
+                while available_lsus > BiogasPlant.MAX_SIZE:
+                    removed_farmer = contributing_neighbors.pop()
+                    available_lsus -= removed_farmer.farm_size
+
+            # TODO: have an actual utility function to decide whether to build a plant
+            # right now this builds just as long as there's enough capacity
+            if BiogasPlant.MIN_SIZE <= available_lsus <= BiogasPlant.MAX_SIZE:
+                self.build_biogas_plant(available_lsus, contributing_neighbors)
+
+    def build_biogas_plant(self, capacity, contributing_neighbors):
+        plant = BiogasPlant(self.model, self, capacity)
+        self.model.grid.place_agent(plant, self.pos)
+
+        self.has_biogas_plant = True
+        self.contributes_to_biogas_plant = True
+        for neighbor in contributing_neighbors:
+            neighbor.contributes_to_biogas_plant = True
+
+        # TODO: we might want to extend the influence to further neighbors and update their influence score
+        return plant
+
+
+def calculate_utility(plant_type, capacity):
+    # TODO: should include age and some other factors I guess
+    return calculate_biogas_plant_return(plant_type, capacity)
+
+
+def get_neighbors_willing_to_contribute(neighbors: list):
+    neighbors = [n for n in neighbors if isinstance(n, Farmer)]
+    return [
+        n
+        for n in neighbors
+        if not n.contributes_to_biogas_plant and n.willingness_to_contribute > 0.5
+    ]
+
+
+def get_available_LSUs(neighbors: list):
+    return sum(n.farm_size for n in neighbors)
+
+
+def calculate_biogas_plant_return(type, capacity, num_years=20):
+    # could also add in maintenance, etc.
+    if type == BiogasPlant.SMALL:
+        return capacity * 0.27 * num_years
+    elif type == BiogasPlant.MEDIUM:
+        return capacity * 0.25 * num_years
+    elif type == BiogasPlant.LARGE:
+        return capacity * 0.22 * num_years
 
 
 class BiogasPlant(Agent):
@@ -95,22 +124,48 @@ class BiogasPlant(Agent):
     A biogas plant agent that provides payments to its owner.
     """
 
-    def __init__(self, model, owner):
+    SMALL = 1
+    MEDIUM = 2
+    LARGE = 3
+
+    MIN_SIZE = 75
+    MAX_SIZE = 850
+
+    def __init__(self, model, owner, capacity):
         """
         Initialize a BiogasPlant agent.
 
         Args:
             model: The model instance
-            owner: The Farmer agent that owns this plant
+            capacity: Capacity of the biogas plant
         """
         super().__init__(model)
+        assert BiogasPlant.MIN_SIZE <= capacity <= BiogasPlant.MAX_SIZE, (
+            "Biogas plant capacity must be between "
+            f"{BiogasPlant.MIN_SIZE} and {BiogasPlant.MAX_SIZE} LSUs."
+        )
+        self.capacity = capacity
         self.owner = owner
+        self.plant_type = self.get_size()
+
+    def get_size(self):
+        if self.capacity <= 100:
+            return BiogasPlant.SMALL
+        elif self.capacity <= 600:
+            return BiogasPlant.MEDIUM
+        else:
+            return BiogasPlant.LARGE
+
+    def get_stipend(self):
+        if self.plant_type == BiogasPlant.SMALL:
+            return 0.27 * self.capacity
+        elif self.plant_type == BiogasPlant.MEDIUM:
+            return 0.25 * self.capacity
+        else:
+            return 0.22 * self.capacity
 
     def step(self):
         """
         Execute one step of the agent's behavior.
-
-        The biogas plant currently just exists - payments are handled
-        by the Farmer agent.
         """
-        pass
+        self.owner.money_received += self.get_stipend()
