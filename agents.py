@@ -47,6 +47,31 @@ class Farmer(Agent):
         # Only make decision if don't already have a plant
         if not self.contributes_to_biogas_plant:
             self._decide_whether_to_build_biogas_plant()
+        self._check_and_update_willingness()
+
+    def _check_and_update_willingness(self):
+        if self.model.grid:
+            neighbors = self.model.grid.get_neighbors(
+                self.pos,
+                moore=True,
+                include_center=False,
+                radius=1,  # can increase if needed
+            )
+            neighbors = [n for n in neighbors if isinstance(n, Farmer)]
+            self.willingness_to_contribute += (
+                len([n for n in neighbors if n.contributes_to_biogas_plant]) * 0.01
+            )
+
+            neighbors = self.model.grid.get_neighbors(
+                self.pos,
+                moore=True,
+                include_center=False,
+                radius=3,  # can increase if needed
+            )
+            neighbors = [n for n in neighbors if isinstance(n, Farmer)]
+            self.willingness_to_build += (
+                len([n for n in neighbors if n.has_biogas_plant]) * 0.01
+            )
 
     def _decide_whether_to_build_biogas_plant(self):
         if self.willingness_to_build < 0.5:

@@ -6,6 +6,8 @@ import random
 from mesa import Model
 from mesa.space import MultiGrid
 from mesa.datacollection import DataCollector
+import numpy as np
+
 from agents import Farmer, BiogasPlant
 
 
@@ -50,13 +52,18 @@ class FarmerBiogasModel(Model):
 
         # Create grid
         self.grid = MultiGrid(width, height, torus=False)
+        g = np.random.Generator(np.random.PCG64())
 
         # Create farmers
         for i in range(width):
             for j in range(height):
                 # Random farm size and willingness
-                farm_size = random.uniform(min_farm_capacity, max_farm_capacity)
-                willingness = random.uniform(min_willingness, max_willingness)
+                farm_size = min(
+                    g.exponential(scale=1 / 3) * (max_farm_capacity - min_farm_capacity)
+                    + min_farm_capacity,
+                    max_farm_capacity,
+                )
+                willingness = g.uniform(min_willingness, max_willingness)
 
                 # Create farmer agent
                 farmer = Farmer(self, farm_size, willingness, willingness)
