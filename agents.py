@@ -4,33 +4,42 @@ Agent classes for the farmer-biogas ABM.
 
 from enum import Enum
 from mesa import Agent
+import math
 
 
 class Farmer(Agent):
     """
     A farmer agent that decides whether to build a biogas plant.
-
-    Decision is based on:
-    - Farm size
-    - Neighboring farms
-    - Personal willingness
+    ...
     """
 
     def __init__(
-        self, model, farm_size, willingness_to_build, willingness_to_contribute
+            self, model, farm_size, willingness_to_build, willingness_to_contribute
     ):
         """
         Initialize a Farmer agent.
-
-        Args:
-            model: The model instance
-            farm_size: Size of the farmer's farm (affects decision)
-            willingness: Personal willingness factor (0.0-1.0)
+        ...
         """
         super().__init__(model)
         self.farm_size = farm_size
+
+        # store initial values (reluctance at t=0)
+        self.base_willingness_to_build = willingness_to_build
+        self.base_willingness_to_contribute = willingness_to_contribute
+
+        # these will be updated over time
         self.willingness_to_build = willingness_to_build
         self.willingness_to_contribute = willingness_to_contribute
+
+        # *** VERBESSERUNG: Lese Gewichte aus dem Modell ***
+        # Ermöglicht Sensitivitätsanalysen
+        self.weight_global_build = self.model.weight_global_build
+        self.weight_social_build = self.model.weight_social_build
+        self.weight_global_contribute = self.model.weight_global_contribute
+        self.weight_social_contribute = self.model.weight_social_contribute
+
+        self.time_of_adoption = None  # record when this farmer first adopts
+
         self.has_biogas_plant = False
         self.contributes_to_biogas_plant = False
         self.money_received = 0.0
@@ -38,68 +47,106 @@ class Farmer(Agent):
     def step(self):
         """
         Execute one step of the agent's behavior.
-
-        The farmer decides whether to build a biogas plant based on:
-        - Their farm size
-        - The number/size of neighboring farms
-        - Their personal willingness
         """
-        # Only make decision if don't already have a plant
-        if not self.contributes_to_biogas_plant:
-            self._decide_whether_to_build_biogas_plant()
-        self._check_and_update_willingness()
-
-    def _check_and_update_willingness(self):
-        if self.model.grid:
-            neighbors = self.model.grid.get_neighbors(
-                self.pos,
-                moore=True,
-                include_center=False,
-                radius=1,  # can increase if needed
-            )
-            neighbors = [n for n in neighbors if isinstance(n, Farmer)]
-            self.willingness_to_contribute += (
-                len([n for n in neighbors if n.contributes_to_biogas_plant]) * 0.01
-            )
-
-            neighbors = self.model.grid.get_neighbors(
-                self.pos,
-                moore=True,
-                include_center=False,
-                radius=3,  # can increase if needed
-            )
-            neighbors = [n for n in neighbors if isinstance(n, Farmer)]
-            self.willingness_to_build += (
-                len([n for n in neighbors if n.has_biogas_plant]) * 0.01
-            )
-
-    def _decide_whether_to_build_biogas_plant(self):
-        if self.willingness_to_build < 0.5:
-            return
+        # Wenn der Bauer schon Teil einer Anlage ist, muss er nichts mehr tun.
+        # (Er wird aber noch von anderen als Nachbar "gesehen")
         if self.contributes_to_biogas_plant:
             return
 
+        # 1) update trust / willingness based on time and neighbors
+        self._update_adoption_and_learning()
+
+        # 2) then make the decision with the updated willingness
+        # (self.contributes_to_biogas_plant ist hier immer False)
+        self._decide_whether_to_build_biogas_plant()
+
+    def _update_adoption_and_learning(self):
+        """Update willingness_to_build / contribute via time-based and social learning."""
+
+        # --- 1. Global learning over time (same for all farmers) ---
+
+        # *** VERBESSERUNG: Nutze Standard Mesa Scheduler Zeit ***
+        t = self.model.time
+        k = self.model.learning_rate
+        t0 = self.model.learning_midpoint
+
+        global_learning = 1.0 / (1.0 + math.exp(-k * (t - t0)))  # in [0,1]
+
+        # --- 2. Social learning from neighbors ---
         if self.model.grid:
             neighbors = self.model.grid.get_neighbors(
                 self.pos,
                 moore=True,
                 include_center=False,
-                radius=1,  # can increase if needed
+                radius=2,  # Annahme: Lerne von Radius 2
             )
-            contributing_neighbors = get_neighbors_willing_to_contribute(neighbors)
+            neighbors = [n for n in neighbors if isinstance(n, Farmer)]
+        else:
+            neighbors = []
+
+        if neighbors:
+            adopted_neighbors = [
+                n for n in neighbors if n.has_biogas_plant or n.contributes_to_biogas_plant
+            ]
+            share_adopted = len(adopted_neighbors) / len(neighbors)
+        else:
+            share_adopted = 0.0
+
+        # --- 3. Combine baseline reluctance + global + social learning ---
+        # clamp everything to [0,1] for safety
+        self.willingness_to_build = max(
+            0.0,
+            min(
+                1.0,
+                self.base_willingness_to_build
+                + self.weight_global_build * global_learning
+                + self.weight_social_build * share_adopted,
+            ),
+        )
+
+        self.willingness_to_contribute = max(
+            0.0,
+            min(
+                1.0,
+                self.base_willingness_to_contribute
+                + self.weight_global_contribute * global_learning
+                + self.weight_social_contribute * share_adopted,
+            ),
+        )
+
+    def _decide_whether_to_build_biogas_plant(self):
+        # (Check auf self.contributes_to_biogas_plant ist jetzt im step(),
+        #  also hier nicht mehr nötig)
+
+        # probabilistic adoption: higher willingness -> higher chance this step
+        p_adopt = max(0.0, min(1.0, self.willingness_to_build ** 3))
+
+        if self.random.random() > p_adopt:
+            return
+
+        # rest of your capacity / neighbor logic as before
+        if self.model.grid:
+            neighbors = self.model.grid.get_neighbors(
+                self.pos,
+                moore=True,
+                include_center=False,
+                radius=1,  # Annahme: Kooperiere nur mit Radius 1
+            )
+
+            # *** VERBESSERUNG: Übergebe Modell-Parameter statt 0.5 ***
+            threshold = self.model.contribute_threshold
+            contributing_neighbors = get_neighbors_willing_to_contribute(neighbors, threshold)
+
             available_lsus = get_available_LSUs(contributing_neighbors) + self.farm_size
 
-            # As per the paper, we only use the largest farms if we have excess capacity
             if available_lsus > BiogasPlant.MAX_SIZE:
                 contributing_neighbors = sorted(
                     contributing_neighbors, key=lambda x: x.farm_size, reverse=True
                 )
-                while available_lsus > BiogasPlant.MAX_SIZE:
+                while available_lsus > BiogasPlant.MAX_SIZE and contributing_neighbors:
                     removed_farmer = contributing_neighbors.pop()
                     available_lsus -= removed_farmer.farm_size
 
-            # TODO: have an actual utility function to decide whether to build a plant
-            # right now this builds just as long as there's enough capacity
             if BiogasPlant.MIN_SIZE <= available_lsus <= BiogasPlant.MAX_SIZE:
                 self.build_biogas_plant(available_lsus, contributing_neighbors)
 
@@ -109,10 +156,17 @@ class Farmer(Agent):
 
         self.has_biogas_plant = True
         self.contributes_to_biogas_plant = True
+
+        current_time = self.model.time
+
+        if self.time_of_adoption is None:
+            self.time_of_adoption = current_time
+
         for neighbor in contributing_neighbors:
             neighbor.contributes_to_biogas_plant = True
+            if neighbor.time_of_adoption is None:
+                neighbor.time_of_adoption = current_time
 
-        # TODO: we might want to extend the influence to further neighbors and update their influence score
         return plant
 
 
@@ -121,18 +175,22 @@ def calculate_utility(plant_type, capacity):
     return calculate_biogas_plant_return(plant_type, capacity)
 
 
-def get_neighbors_willing_to_contribute(neighbors: list):
+# *** VERBESSERUNG: Nimm Schwellenwert als Argument ***
+def get_neighbors_willing_to_contribute(neighbors: list, contribute_threshold: float):
     neighbors = [n for n in neighbors if isinstance(n, Farmer)]
     return [
         n
         for n in neighbors
-        if not n.contributes_to_biogas_plant and n.willingness_to_contribute > 0.5
+        if not n.contributes_to_biogas_plant
+           and n.willingness_to_contribute > contribute_threshold
     ]
 
 
 def get_available_LSUs(neighbors: list):
     return sum(n.farm_size for n in neighbors)
 
+
+# ... (Rest des Codes bleibt gleich) ...
 
 def calculate_biogas_plant_return(type, capacity, num_years=20):
     # could also add in maintenance, etc.
@@ -148,7 +206,7 @@ class BiogasPlant(Agent):
     """
     A biogas plant agent that provides payments to its owner.
     """
-
+    # ... (Keine Änderungen hier) ...
     SMALL = 1
     MEDIUM = 2
     LARGE = 3
@@ -157,13 +215,6 @@ class BiogasPlant(Agent):
     MAX_SIZE = 850
 
     def __init__(self, model, owner, capacity):
-        """
-        Initialize a BiogasPlant agent.
-
-        Args:
-            model: The model instance
-            capacity: Capacity of the biogas plant
-        """
         super().__init__(model)
         assert BiogasPlant.MIN_SIZE <= capacity <= BiogasPlant.MAX_SIZE, (
             "Biogas plant capacity must be between "
@@ -190,7 +241,4 @@ class BiogasPlant(Agent):
             return 0.22 * self.capacity
 
     def step(self):
-        """
-        Execute one step of the agent's behavior.
-        """
         self.owner.money_received += self.get_stipend()

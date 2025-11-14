@@ -85,7 +85,7 @@ model_params = {
     },
     "min_willingness": {
         "type": "SliderFloat",
-        "value": 0.3,
+        "value": 0.0,
         "label": "Minimum Willingness",
         "min": 0.0,
         "max": 0.5,
@@ -93,7 +93,7 @@ model_params = {
     },
     "max_willingness": {
         "type": "SliderFloat",
-        "value": 0.9,
+        "value": 0.8,
         "label": "Maximum Willingness",
         "min": 0.5,
         "max": 1.0,
@@ -143,9 +143,20 @@ page = SolaraViz(
     renderer=None,
     components=[
         make_space_component(agent_portrayal),
-        make_plot_component({"Total Farmers": "blue", "Farmers with Plants": "green"}),
+
+        # Plot 1: diffusion curve + its derivative
+        make_plot_component(
+            {
+                "Total Farmers": "blue",
+                "Cumulative Adopters": "green",       # S-curve
+                "New Adopters per Step": "orange",    # bell-shaped curve
+            }
+        ),
+
+        # Plot 2: money
         make_plot_component({"Total Money Distributed": "purple"}),
-        # Live control to adjust biogas payment while the model runs
+
+        # live control
         BiogasPaymentControl,
     ],
     model_params=model_params,
