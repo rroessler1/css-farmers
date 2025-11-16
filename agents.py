@@ -14,7 +14,7 @@ class Farmer(Agent):
     """
 
     def __init__(
-            self, model, farm_size, willingness_to_build, willingness_to_contribute
+        self, model, farm_size, willingness_to_build, willingness_to_contribute
     ):
         """
         Initialize a Farmer agent.
@@ -42,12 +42,17 @@ class Farmer(Agent):
 
         self.has_biogas_plant = False
         self.contributes_to_biogas_plant = False
+        self.biogas_plant = None
         self.money_received = 0.0
 
     def step(self):
         """
         Execute one step of the agent's behavior.
         """
+        if self.has_biogas_plant:
+            self._decide_whether_to_upgrade_biogas_plant()
+            return
+
         # Wenn der Bauer schon Teil einer Anlage ist, muss er nichts mehr tun.
         # (Er wird aber noch von anderen als Nachbar "gesehen")
         if self.contributes_to_biogas_plant:
@@ -86,7 +91,9 @@ class Farmer(Agent):
 
         if neighbors:
             adopted_neighbors = [
-                n for n in neighbors if n.has_biogas_plant or n.contributes_to_biogas_plant
+                n
+                for n in neighbors
+                if n.has_biogas_plant or n.contributes_to_biogas_plant
             ]
             share_adopted = len(adopted_neighbors) / len(neighbors)
         else:
@@ -119,7 +126,7 @@ class Farmer(Agent):
         #  also hier nicht mehr nötig)
 
         # probabilistic adoption: higher willingness -> higher chance this step
-        p_adopt = max(0.0, min(1.0, self.willingness_to_build ** 3))
+        p_adopt = max(0.0, min(1.0, self.willingness_to_build**3))
 
         if self.random.random() > p_adopt:
             return
@@ -135,7 +142,9 @@ class Farmer(Agent):
 
             # *** VERBESSERUNG: Übergebe Modell-Parameter statt 0.5 ***
             threshold = self.model.contribute_threshold
-            contributing_neighbors = get_neighbors_willing_to_contribute(neighbors, threshold)
+            contributing_neighbors = get_neighbors_willing_to_contribute(
+                neighbors, threshold
+            )
 
             available_lsus = get_available_LSUs(contributing_neighbors) + self.farm_size
 
@@ -150,24 +159,48 @@ class Farmer(Agent):
             if BiogasPlant.MIN_SIZE <= available_lsus <= BiogasPlant.MAX_SIZE:
                 self.build_biogas_plant(available_lsus, contributing_neighbors)
 
+    def _decide_whether_to_upgrade_biogas_plant(self):
+        p_adopt = max(0.0, min(1.0, self.willingness_to_build**3))
+        if self.random.random() > p_adopt:
+            return
+
+        if self.model.grid:
+            neighbors = self.model.grid.get_neighbors(
+                self.pos,
+                moore=True,
+                include_center=False,
+                radius=1,
+            )
+
+            threshold = self.model.contribute_threshold
+            contributing_neighbors = get_neighbors_willing_to_contribute(
+                neighbors, threshold
+            )
+            additional_lsus = get_available_LSUs(contributing_neighbors)
+            if additional_lsus + self.biogas_plant.capacity > BiogasPlant.MAX_SIZE:
+                contributing_neighbors = sorted(
+                    contributing_neighbors, key=lambda x: x.farm_size, reverse=True
+                )
+                while additional_lsus > BiogasPlant.MAX_SIZE and contributing_neighbors:
+                    removed_farmer = contributing_neighbors.pop()
+                    additional_lsus -= removed_farmer.farm_size
+
+            if self.biogas_plant.can_upgrade(additional_lsus):
+                self.biogas_plant.upgrade(additional_lsus, contributing_neighbors)
+                mark_neighbors_as_contributors(contributing_neighbors, self.model.time)
+
     def build_biogas_plant(self, capacity, contributing_neighbors):
-        plant = BiogasPlant(self.model, self, capacity)
+        plant = BiogasPlant(self.model, self, contributing_neighbors, capacity)
         self.model.grid.place_agent(plant, self.pos)
 
         self.has_biogas_plant = True
         self.contributes_to_biogas_plant = True
+        self.biogas_plant = plant
 
         current_time = self.model.time
-
-        if self.time_of_adoption is None:
-            self.time_of_adoption = current_time
-
-        for neighbor in contributing_neighbors:
-            neighbor.contributes_to_biogas_plant = True
-            if neighbor.time_of_adoption is None:
-                neighbor.time_of_adoption = current_time
-
-        return plant
+        assert self.time_of_adoption is None, "Farmer is already an adopter!"
+        self.time_of_adoption = current_time
+        mark_neighbors_as_contributors(contributing_neighbors, current_time)
 
 
 def calculate_utility(plant_type, capacity):
@@ -176,14 +209,23 @@ def calculate_utility(plant_type, capacity):
 
 
 # *** VERBESSERUNG: Nimm Schwellenwert als Argument ***
-def get_neighbors_willing_to_contribute(neighbors: list, contribute_threshold: float):
+def get_neighbors_willing_to_contribute(
+    neighbors: list, contribute_threshold: float, include_current_contributors=False
+):
     neighbors = [n for n in neighbors if isinstance(n, Farmer)]
     return [
         n
         for n in neighbors
         if not n.contributes_to_biogas_plant
-           and n.willingness_to_contribute > contribute_threshold
+        and n.willingness_to_contribute > contribute_threshold
     ]
+
+
+def mark_neighbors_as_contributors(contributing_neighbors: list, current_time):
+    for neighbor in contributing_neighbors:
+        assert neighbor.time_of_adoption is None, "Neighbor is already a contributor!"
+        neighbor.contributes_to_biogas_plant = True
+        neighbor.time_of_adoption = current_time
 
 
 def get_available_LSUs(neighbors: list):
@@ -191,6 +233,7 @@ def get_available_LSUs(neighbors: list):
 
 
 # ... (Rest des Codes bleibt gleich) ...
+
 
 def calculate_biogas_plant_return(type, capacity, num_years=20):
     # could also add in maintenance, etc.
@@ -206,6 +249,7 @@ class BiogasPlant(Agent):
     """
     A biogas plant agent that provides payments to its owner.
     """
+
     # ... (Keine Änderungen hier) ...
     SMALL = 1
     MEDIUM = 2
@@ -214,7 +258,7 @@ class BiogasPlant(Agent):
     MIN_SIZE = 75
     MAX_SIZE = 850
 
-    def __init__(self, model, owner, capacity):
+    def __init__(self, model, owner, contributors, capacity):
         super().__init__(model)
         assert BiogasPlant.MIN_SIZE <= capacity <= BiogasPlant.MAX_SIZE, (
             "Biogas plant capacity must be between "
@@ -222,15 +266,37 @@ class BiogasPlant(Agent):
         )
         self.capacity = capacity
         self.owner = owner
-        self.plant_type = self.get_size()
+        self.contributors = contributors
+        self.plant_type = self.get_size(capacity)
+        self.num_upgrades = 0
 
-    def get_size(self):
-        if self.capacity <= 100:
+    def can_upgrade(self, additional_capacity):
+        return self.get_size(self.capacity + additional_capacity) > self.plant_type
+
+    def upgrade(self, additional_capacity, new_contributors):
+        assert self.can_upgrade(
+            additional_capacity
+        ), "New capacity must be larger to upgrade."
+        self.capacity += additional_capacity
+        self.contributors = self.contributors + new_contributors
+        self.plant_type = self.get_size(self.capacity)
+        self.num_upgrades += 1
+
+    def get_size(self, capacity):
+        if capacity <= 100:
             return BiogasPlant.SMALL
-        elif self.capacity <= 600:
+        elif capacity <= 600:
             return BiogasPlant.MEDIUM
         else:
             return BiogasPlant.LARGE
+
+    def get_color(self):
+        if self.plant_type == BiogasPlant.SMALL:
+            return "purple"
+        elif self.plant_type == BiogasPlant.MEDIUM:
+            return "orange"
+        else:
+            return "red"
 
     def get_stipend(self):
         if self.plant_type == BiogasPlant.SMALL:

@@ -23,30 +23,28 @@ def agent_portrayal(agent):
     if isinstance(agent, Farmer):
         if agent.has_biogas_plant:
             return {
-                "size": 60,
-                "color": "blue",
+                "size": 60,  # size doesn't work unfortunately :(
+                "color": agent.biogas_plant.get_color(),
                 "marker": "s",
             }
         else:
             portrayal = {
                 "size": 50,
                 "color": (
-                    "green"
+                    agent.biogas_plant.get_color()
                     if agent.has_biogas_plant
-                    else "yellow" if agent.contributes_to_biogas_plant else "brown"
+                    else "green" if agent.contributes_to_biogas_plant else "blue"
                 ),
                 "marker": "o",
             }
-            # Size based on farm size
-            portrayal["size"] = 30 + (agent.farm_size / 5)
             return portrayal
-    if isinstance(agent, BiogasPlant):
+    else:
+        # This is the biogas plant. Haven't figured out how to hide agents
         return {
-            "size": 60,
-            "color": "blue",
+            "size": 60,  # size doesn't work unfortunately :(
+            "color": agent.get_color(),
             "marker": "s",
         }
-    return {}
 
 
 # Model parameters for the interface
@@ -143,19 +141,23 @@ page = SolaraViz(
     renderer=None,
     components=[
         make_space_component(agent_portrayal),
-
         # Plot 1: diffusion curve + its derivative
         make_plot_component(
             {
                 "Total Farmers": "blue",
-                "Cumulative Adopters": "green",       # S-curve
-                "New Adopters per Step": "orange",    # bell-shaped curve
+                "Cumulative Adopters": "green",  # S-curve
+                "New Adopters per Step": "orange",  # bell-shaped curve
             }
         ),
-
+        # Plot 2: Biogas Plants
+        make_plot_component(
+            {
+                "Total Biogas Plants": "blue",
+                "Total Plant Upgrades": "green",  # S-curve
+            }
+        ),
         # Plot 2: money
         make_plot_component({"Total Money Distributed": "purple"}),
-
         # live control
         BiogasPaymentControl,
     ],

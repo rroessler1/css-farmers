@@ -26,8 +26,8 @@ class FarmerBiogasModel(Model):
         plant_cost=700.0,
         biogas_payment=0.10,
         # S-Kurven Parameter
-        learning_rate=0.05,      # k
-        learning_midpoint=25,   # t0
+        learning_rate=0.05,  # k
+        learning_midpoint=25,  # t0
         # Gewichte
         weight_global_build=0.5,
         weight_social_build=0.05,
@@ -69,8 +69,7 @@ class FarmerBiogasModel(Model):
             for y in range(height):
                 # Farmgröße (exponentielle Verteilung)
                 farm_size = min(
-                    g.exponential(scale=1 / 3)
-                    * (max_farm_capacity - min_farm_capacity)
+                    g.exponential(scale=1 / 3) * (max_farm_capacity - min_farm_capacity)
                     + min_farm_capacity,
                     max_farm_capacity,
                 )
@@ -101,21 +100,25 @@ class FarmerBiogasModel(Model):
                     1 for a in m.agents if isinstance(a, Farmer)
                 ),
                 "Farmers with Plants": lambda m: sum(
-                    1 for a in m.agents
-                    if isinstance(a, Farmer) and a.has_biogas_plant
+                    1 for a in m.agents if isinstance(a, Farmer) and a.has_biogas_plant
                 ),
                 "Total Biogas Plants": lambda m: sum(
                     1 for a in m.agents if isinstance(a, BiogasPlant)
+                ),
+                "Total Plant Upgrades": lambda m: sum(
+                    a.num_upgrades for a in m.agents if isinstance(a, BiogasPlant)
                 ),
                 "Total Money Distributed": lambda m: sum(
                     a.money_received for a in m.agents if isinstance(a, Farmer)
                 ),
                 "Cumulative Adopters": lambda m: sum(
-                    1 for a in m.agents
+                    1
+                    for a in m.agents
                     if isinstance(a, Farmer) and a.contributes_to_biogas_plant
                 ),
                 "New Adopters per Step": lambda m: sum(
-                    1 for a in m.agents
+                    1
+                    for a in m.agents
                     if isinstance(a, Farmer)
                     and a.time_of_adoption is not None
                     and a.time_of_adoption == m.time
