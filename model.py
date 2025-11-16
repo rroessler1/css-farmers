@@ -111,6 +111,16 @@ class FarmerBiogasModel(Model):
                 "Total Money Distributed": lambda m: sum(
                     a.money_received for a in m.agents if isinstance(a, Farmer)
                 ),
+                "Total Plant Utilization": lambda m: sum(
+                    a.capacity for a in m.agents if isinstance(a, BiogasPlant)
+                ),
+                "Total KW Produced": lambda m: sum(
+                    a.get_kw() for a in m.agents if isinstance(a, BiogasPlant)
+                ),
+                "Total Plant Cost": lambda m: sum(
+                    a.get_plant_cost() for a in m.agents if isinstance(a, BiogasPlant)
+                ),
+                "Average Cost per KW": average_cost_per_kw,
                 "Cumulative Adopters": lambda m: sum(
                     1
                     for a in m.agents
@@ -145,3 +155,10 @@ class FarmerBiogasModel(Model):
         self.time += 1  # our own time counter
         self.agents.shuffle_do("step")  # calls .step() on all agents
         self.datacollector.collect(self)
+
+
+def average_cost_per_kw(model):
+    plants = [a for a in model.agents if isinstance(a, BiogasPlant)]
+    tot_cost = sum(a.get_plant_cost() for a in plants)
+    tot_kw = sum(a.get_kw() for a in plants)
+    return tot_cost / tot_kw if tot_kw > 0 else 0.0

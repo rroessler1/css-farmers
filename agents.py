@@ -250,13 +250,15 @@ class BiogasPlant(Agent):
     A biogas plant agent that provides payments to its owner.
     """
 
-    # ... (Keine Änderungen hier) ...
     SMALL = 1
     MEDIUM = 2
     LARGE = 3
 
     MIN_SIZE = 75
     MAX_SIZE = 850
+
+    # source: https://www.euki.de/wp-content/uploads/2021/03/Brochure_Biogas-Initiative_WEB.pdf
+    KW_PER_LSU = 18 / 100  # 18 kW per 100 LSUs
 
     def __init__(self, model, owner, contributors, capacity):
         super().__init__(model)
@@ -283,12 +285,30 @@ class BiogasPlant(Agent):
         self.num_upgrades += 1
 
     def get_size(self, capacity):
+        # This is defined by the paper in Sandrine's group
+        # But we could also define based on kW instead
         if capacity <= 100:
             return BiogasPlant.SMALL
         elif capacity <= 600:
             return BiogasPlant.MEDIUM
         else:
             return BiogasPlant.LARGE
+
+    def get_kw(self):
+        # source: https://www.euki.de/wp-content/uploads/2021/03/Brochure_Biogas-Initiative_WEB.pdf
+        # large plants are 30% relatively more efficient
+        default_kw = self.capacity * BiogasPlant.KW_PER_LSU
+        factor = (default_kw - 75) / (1000 - 75)
+        factor = max(0.0, min(1.0, factor))
+        return default_kw * (1 + 0.3 * factor)
+
+    def get_plant_cost(self):
+        # source: https://www.dvl.org/uploads/tx_ttproducts/datasheet/DVL-Publikation-Schriftenreihe-22_Vom_Landschaftspflegematerial_zum_Biogas-ein_Beratungsordner.pdf
+        # piecewise function, as plants get cheaper once larger than 75 kW
+        default_price_per_kw = 9000
+        factor = (self.get_kw() - 75) / (150 - 75)
+        factor = max(0.0, min(1.0, factor))
+        return (9000 - factor * (9000 - 6500)) * self.get_kw()
 
     def get_color(self):
         if self.plant_type == BiogasPlant.SMALL:
@@ -299,9 +319,9 @@ class BiogasPlant(Agent):
             return "red"
 
     def get_stipend(self):
-        if self.plant_type == BiogasPlant.SMALL:
+        if self.get_kw() <= 50:
             return 0.27 * self.capacity
-        elif self.plant_type == BiogasPlant.MEDIUM:
+        elif self.get_kw() <= 100:
             return 0.25 * self.capacity
         else:
             return 0.22 * self.capacity

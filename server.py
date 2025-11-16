@@ -156,8 +156,9 @@ page = SolaraViz(
                 "Total Plant Upgrades": "green",  # S-curve
             }
         ),
-        # Plot 2: money
-        make_plot_component({"Total Money Distributed": "purple"}),
+        make_plot_component({"Total KW Produced": "blue"}),
+        make_plot_component({"Total Plant Cost": "blue"}),
+        make_plot_component({"Average Cost per KW": "blue"}),
         # live control
         BiogasPaymentControl,
     ],
