@@ -41,7 +41,6 @@ class FarmerBiogasModel(Model):
         self.height = height
         self.plant_cost = plant_cost
         self.biogas_payment = biogas_payment
-
         # Zeitvariable für Adoption usw.
         self.time = 0
 

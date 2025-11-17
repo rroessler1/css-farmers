@@ -5,8 +5,6 @@ Agent classes for the farmer-biogas ABM.
 from enum import Enum
 from mesa import Agent
 import math
-
-
 class Farmer(Agent):
     """
     A farmer agent that decides whether to build a biogas plant.
@@ -203,9 +201,61 @@ class Farmer(Agent):
         mark_neighbors_as_contributors(contributing_neighbors, current_time)
 
 
-def calculate_utility(plant_type, capacity):
-    # TODO: should include age and some other factors I guess
-    return calculate_biogas_plant_return(plant_type, capacity)
+def calculate_utility(
+        plant_capacity: float, # in lsu
+        farmer_farm_size: float, # in lsu
+        electricity_price: float, # chf per kwh
+        maintenance_costs: float, # every x years in chf
+        maintenance_interval: int, # in years
+        n_owners: int,
+        plant_lifetime_years: int = 20,
+        discount_rate: float = 0.04,
+        full_load: int = 8000, # in hours per year
+        co_owner_panalty: float = 0.1, # percentage reduction in utility per co-owner
+        profit_scale_chf: float = 100000.0,
+):
+
+    if plant_capacity <= 0 or farmer_farm_size <= 0:
+        return -1e9
+
+    # annual energy and revenue
+    kw = plant_capacity * BiogasPlant.KW_PER_LSU
+    annual_kwh = kw * full_load
+    annual_revenue_total = annual_kwh * electricity_price
+
+    # investment costs
+    default_price_per_kw = 9000.0
+    factor = (kw - 75.0) / (150.0 - 75.0)
+    factor = max(0.0, min(1.0, factor))
+    price_per_kw = default_price_per_kw - factor * (default_price_per_kw - 6500.0)
+    plant_capex_chf = price_per_kw * kw
+
+    # maintenance
+    annual_maintenance_total = maintenance_costs / float(max(1, maintenance_interval))
+
+    # farmer's share of capacity
+    share_this_farm = farmer_farm_size / plant_capacity
+    share_this_farm = max(0.0, min(1.0, share_this_farm))
+
+    # annual net cash-flow for this farmer
+    annual_profit_for_farmer = share_this_farm * (annual_revenue_total - annual_maintenance_total)
+
+    # npv calculation
+    # farmer has to pay their share of initial costs at t=0
+    # receive discounted annual profits for the plant lifetime
+    capex_share_for_farmer = plant_capex_chf / float(max(1, n_owners))
+    npv = -capex_share_for_farmer
+
+    for years in range(1, plant_lifetime_years + 1):
+        npv += annual_profit_for_farmer / ((1.0 + discount_rate) ** years)
+
+    # converting npv (chf) to utility (dimensionless)
+    utility_profit = npv / profit_scale_chf
+
+    # adding a penalty for co-owners (since sharing reduces control, etc.)
+    utility_co_owners = -co_owner_panalty * float(max(0, n_owners -1))
+
+    return utility_profit + utility_co_owners
 
 
 # *** VERBESSERUNG: Nimm Schwellenwert als Argument ***
