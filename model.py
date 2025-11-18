@@ -21,10 +21,7 @@ class FarmerBiogasModel(Model):
         width=20,
         height=20,
         farm_capacity_shift=0,
-        min_willingness=0.3,  # werden aktuell nicht direkt genutzt
-        max_willingness=0.9,  # werden aktuell nicht direkt genutzt
-        plant_cost=700.0,
-        biogas_payment=0.10,
+        biogas_payment=0.10,  # not being used, but we could use this to adjust the subsidy
         # S-Kurven Parameter
         learning_rate=0.05,  # k
         learning_midpoint=25,  # t0
@@ -33,13 +30,12 @@ class FarmerBiogasModel(Model):
         weight_social_build=0.05,
         weight_global_contribute=0.5,
         weight_social_contribute=0.1,
-        contribute_threshold=0.7,
+        contribute_threshold=0.4,
     ):
         super().__init__()
 
         self.width = width
         self.height = height
-        self.plant_cost = plant_cost
         self.biogas_payment = biogas_payment
         # Zeitvariable für Adoption usw.
         self.time = 0
@@ -75,8 +71,8 @@ class FarmerBiogasModel(Model):
                 else:
                     base_willingness_build = g.uniform(0.0, 0.3)  # Mehrheit
 
-                base_willingness_contrib = min(
-                    1.0, base_willingness_build + g.uniform(0.0, 0.2)
+                base_willingness_contrib = max(
+                    0.0, min(1.0, base_willingness_build + g.uniform(0.0, 0.2))
                 )
 
                 farmer = Farmer(

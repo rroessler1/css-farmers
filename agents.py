@@ -194,7 +194,7 @@ class Farmer(Agent):
 
             if self.biogas_plant.can_upgrade(additional_lsus):
                 self.biogas_plant.upgrade(additional_lsus, contributing_neighbors)
-                mark_neighbors_as_contributors(contributing_neighbors, self.model.time)
+                mark_neighbors_as_contributors(contributing_neighbors, self.model)
 
     def build_biogas_plant(self, capacity, contributing_neighbors):
         plant = BiogasPlant(self.model, self, contributing_neighbors, capacity)
@@ -207,7 +207,7 @@ class Farmer(Agent):
         current_time = self.model.time
         assert self.time_of_adoption is None, "Farmer is already an adopter!"
         self.time_of_adoption = current_time
-        mark_neighbors_as_contributors(contributing_neighbors, current_time)
+        mark_neighbors_as_contributors(contributing_neighbors, self.model)
 
 
 def calculate_utility(
@@ -280,11 +280,12 @@ def get_neighbors_willing_to_contribute(
     ]
 
 
-def mark_neighbors_as_contributors(contributing_neighbors: list, current_time):
+def mark_neighbors_as_contributors(contributing_neighbors: list, model):
     for neighbor in contributing_neighbors:
         assert neighbor.time_of_adoption is None, "Neighbor is already a contributor!"
         neighbor.contributes_to_biogas_plant = True
-        neighbor.time_of_adoption = current_time
+        neighbor.time_of_adoption = model.time
+        model.grid.remove_agent(neighbor)
 
 
 def get_available_LSUs(neighbors: list):

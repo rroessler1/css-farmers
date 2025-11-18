@@ -73,29 +73,13 @@ model_params = {
         "max": 50,
         "step": 5,
     },
-    "min_willingness": {
+    "contribute_threshold": {
         "type": "SliderFloat",
-        "value": 0.0,
-        "label": "Minimum Willingness",
+        "value": 0.4,
+        "label": "Contribution Threshold",
         "min": 0.0,
-        "max": 0.5,
-        "step": 0.1,
-    },
-    "max_willingness": {
-        "type": "SliderFloat",
-        "value": 0.8,
-        "label": "Maximum Willingness",
-        "min": 0.5,
         "max": 1.0,
-        "step": 0.1,
-    },
-    "plant_cost": {
-        "type": "SliderFloat",
-        "value": 700,
-        "label": "Biogas Plant Cost ($)",
-        "min": 0,
-        "max": 2000,
-        "step": 50,
+        "step": 0.05,
     },
 }
 

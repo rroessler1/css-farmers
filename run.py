@@ -18,8 +18,7 @@ def run_model(steps=100):
         width=10,
         height=10,
         farm_capacity_shift=0,
-        min_willingness=0.3,
-        max_willingness=0.9,
+        contribute_threshold=0.4,
         biogas_payment=100.0,
     )
 
