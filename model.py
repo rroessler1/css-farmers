@@ -8,6 +8,7 @@ from mesa.datacollection import DataCollector
 import numpy as np
 
 from agents import Farmer, BiogasPlant
+from lsu_distribution import sample_lsu
 
 
 class FarmerBiogasModel(Model):
@@ -19,8 +20,7 @@ class FarmerBiogasModel(Model):
         self,
         width=20,
         height=20,
-        min_farm_capacity=10,
-        max_farm_capacity=100,
+        farm_capacity_shift=0,
         min_willingness=0.3,  # werden aktuell nicht direkt genutzt
         max_willingness=0.9,  # werden aktuell nicht direkt genutzt
         plant_cost=700.0,
@@ -67,11 +67,7 @@ class FarmerBiogasModel(Model):
         for x in range(width):
             for y in range(height):
                 # Farmgröße (exponentielle Verteilung)
-                farm_size = min(
-                    g.exponential(scale=1 / 3) * (max_farm_capacity - min_farm_capacity)
-                    + min_farm_capacity,
-                    max_farm_capacity,
-                )
+                farm_size = sample_lsu(farm_capacity_shift)
 
                 # Anfängliche Bereitschaft
                 if g.random() < p_innovators:
@@ -114,10 +110,12 @@ class FarmerBiogasModel(Model):
                     a.capacity for a in m.agents if isinstance(a, BiogasPlant)
                 ),
                 "Total KW Produced": lambda m: sum(
-                    a.get_kw() for a in m.agents if isinstance(a, BiogasPlant)
+                    a.get_kw(a.capacity) for a in m.agents if isinstance(a, BiogasPlant)
                 ),
                 "Total Plant Cost": lambda m: sum(
-                    a.get_plant_cost() for a in m.agents if isinstance(a, BiogasPlant)
+                    a.get_plant_cost(a.capacity)
+                    for a in m.agents
+                    if isinstance(a, BiogasPlant)
                 ),
                 "Average Cost per KW": average_cost_per_kw,
                 "Cumulative Adopters": lambda m: sum(
@@ -158,6 +156,6 @@ class FarmerBiogasModel(Model):
 
 def average_cost_per_kw(model):
     plants = [a for a in model.agents if isinstance(a, BiogasPlant)]
-    tot_cost = sum(a.get_plant_cost() for a in plants)
-    tot_kw = sum(a.get_kw() for a in plants)
+    tot_cost = sum(a.get_plant_cost(a.capacity) for a in plants)
+    tot_kw = sum(a.get_kw(a.capacity) for a in plants)
     return tot_cost / tot_kw if tot_kw > 0 else 0.0

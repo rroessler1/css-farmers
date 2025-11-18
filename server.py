@@ -65,21 +65,13 @@ model_params = {
         "max": 30,
         "step": 1,
     },
-    "min_farm_capacity": {
+    "farm_capacity_shift": {
         "type": "SliderInt",
         "value": 10,
-        "label": "Minimum Farm Capacity",
-        "min": 5,
+        "label": "Farm Capacity Shift",
+        "min": -50,
         "max": 50,
         "step": 5,
-    },
-    "max_farm_capacity": {
-        "type": "SliderInt",
-        "value": 100,
-        "label": "Maximum Farm Capacity",
-        "min": 50,
-        "max": 200,
-        "step": 10,
     },
     "min_willingness": {
         "type": "SliderFloat",

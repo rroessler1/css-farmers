@@ -5,6 +5,8 @@ Agent classes for the farmer-biogas ABM.
 from enum import Enum
 from mesa import Agent
 import math
+
+
 class Farmer(Agent):
     """
     A farmer agent that decides whether to build a biogas plant.
@@ -155,6 +157,13 @@ class Farmer(Agent):
                     available_lsus -= removed_farmer.farm_size
 
             if BiogasPlant.MIN_SIZE <= available_lsus <= BiogasPlant.MAX_SIZE:
+                calculate_utility(
+                    plant_capacity=available_lsus,
+                    farmer_farm_size=self.farm_size,
+                    maintenance_costs=0,
+                    maintenance_interval=1,
+                    n_owners=1,
+                )
                 self.build_biogas_plant(available_lsus, contributing_neighbors)
 
     def _decide_whether_to_upgrade_biogas_plant(self):
@@ -202,33 +211,27 @@ class Farmer(Agent):
 
 
 def calculate_utility(
-        plant_capacity: float, # in lsu
-        farmer_farm_size: float, # in lsu
-        electricity_price: float, # chf per kwh
-        maintenance_costs: float, # every x years in chf
-        maintenance_interval: int, # in years
-        n_owners: int,
-        plant_lifetime_years: int = 20,
-        discount_rate: float = 0.04,
-        full_load: int = 8000, # in hours per year
-        co_owner_panalty: float = 0.1, # percentage reduction in utility per co-owner
-        profit_scale_chf: float = 100000.0,
+    plant_capacity: float,  # in lsu
+    farmer_farm_size: float,  # in lsu
+    maintenance_costs: float,  # every x years in chf
+    maintenance_interval: int,  # in years
+    n_owners: int,
+    plant_lifetime_years: int = 20,
+    discount_rate: float = 0.04,
+    co_owner_penalty: float = 0.1,  # percentage reduction in utility per co-owner
+    profit_scale_chf: float = 100000.0,
 ):
 
     if plant_capacity <= 0 or farmer_farm_size <= 0:
         return -1e9
 
     # annual energy and revenue
-    kw = plant_capacity * BiogasPlant.KW_PER_LSU
-    annual_kwh = kw * full_load
-    annual_revenue_total = annual_kwh * electricity_price
+    kw = BiogasPlant.get_kw(plant_capacity)
+    annual_kwh = kw * 24 * 365
+    annual_revenue_total = annual_kwh * BiogasPlant.get_stipend(plant_capacity)
 
     # investment costs
-    default_price_per_kw = 9000.0
-    factor = (kw - 75.0) / (150.0 - 75.0)
-    factor = max(0.0, min(1.0, factor))
-    price_per_kw = default_price_per_kw - factor * (default_price_per_kw - 6500.0)
-    plant_capex_chf = price_per_kw * kw
+    plant_capex_chf = BiogasPlant.get_plant_cost(plant_capacity)
 
     # maintenance
     annual_maintenance_total = maintenance_costs / float(max(1, maintenance_interval))
@@ -238,7 +241,9 @@ def calculate_utility(
     share_this_farm = max(0.0, min(1.0, share_this_farm))
 
     # annual net cash-flow for this farmer
-    annual_profit_for_farmer = share_this_farm * (annual_revenue_total - annual_maintenance_total)
+    annual_profit_for_farmer = share_this_farm * (
+        annual_revenue_total - annual_maintenance_total
+    )
 
     # npv calculation
     # farmer has to pay their share of initial costs at t=0
@@ -253,9 +258,13 @@ def calculate_utility(
     utility_profit = npv / profit_scale_chf
 
     # adding a penalty for co-owners (since sharing reduces control, etc.)
-    utility_co_owners = -co_owner_panalty * float(max(0, n_owners -1))
+    utility_co_owners = -co_owner_penalty * float(max(0, n_owners - 1))
 
-    return utility_profit + utility_co_owners
+    total_utility = utility_profit + utility_co_owners
+    print(
+        f"Utility calculation: capacity={plant_capacity}, farm_size={farmer_farm_size}, n_owners={n_owners} -> utility={total_utility:.3f}"
+    )
+    return total_utility
 
 
 # *** VERBESSERUNG: Nimm Schwellenwert als Argument ***
@@ -322,6 +331,44 @@ class BiogasPlant(Agent):
         self.plant_type = self.get_size(capacity)
         self.num_upgrades = 0
 
+    @staticmethod
+    def get_size(capacity):
+        # This is defined by the paper in Sandrine's group
+        # But we could also define based on kW instead
+        if capacity <= 100:
+            return BiogasPlant.SMALL
+        elif capacity <= 600:
+            return BiogasPlant.MEDIUM
+        else:
+            return BiogasPlant.LARGE
+
+    @staticmethod
+    def get_kw(capacity):
+        # source: https://www.euki.de/wp-content/uploads/2021/03/Brochure_Biogas-Initiative_WEB.pdf
+        # large plants are 30% relatively more efficient
+        default_kw = capacity * BiogasPlant.KW_PER_LSU
+        factor = (default_kw - 75) / (1000 - 75)
+        factor = max(0.0, min(1.0, factor))
+        return default_kw * (1 + 0.3 * factor)
+
+    @staticmethod
+    def get_plant_cost(capacity):
+        # source: https://www.dvl.org/uploads/tx_ttproducts/datasheet/DVL-Publikation-Schriftenreihe-22_Vom_Landschaftspflegematerial_zum_Biogas-ein_Beratungsordner.pdf
+        # piecewise function, as plants get cheaper once larger than 75 kW
+        default_price_per_kw = 9000
+        factor = (BiogasPlant.get_kw(capacity) - 75) / (150 - 75)
+        factor = max(0.0, min(1.0, factor))
+        return (9000 - factor * (9000 - 6500)) * BiogasPlant.get_kw(capacity)
+
+    @staticmethod
+    def get_stipend(capacity):
+        if BiogasPlant.get_kw(capacity) <= 50:
+            return 0.27
+        elif BiogasPlant.get_kw(capacity) <= 100:
+            return 0.25
+        else:
+            return 0.22
+
     def can_upgrade(self, additional_capacity):
         return self.get_size(self.capacity + additional_capacity) > self.plant_type
 
@@ -334,32 +381,6 @@ class BiogasPlant(Agent):
         self.plant_type = self.get_size(self.capacity)
         self.num_upgrades += 1
 
-    def get_size(self, capacity):
-        # This is defined by the paper in Sandrine's group
-        # But we could also define based on kW instead
-        if capacity <= 100:
-            return BiogasPlant.SMALL
-        elif capacity <= 600:
-            return BiogasPlant.MEDIUM
-        else:
-            return BiogasPlant.LARGE
-
-    def get_kw(self):
-        # source: https://www.euki.de/wp-content/uploads/2021/03/Brochure_Biogas-Initiative_WEB.pdf
-        # large plants are 30% relatively more efficient
-        default_kw = self.capacity * BiogasPlant.KW_PER_LSU
-        factor = (default_kw - 75) / (1000 - 75)
-        factor = max(0.0, min(1.0, factor))
-        return default_kw * (1 + 0.3 * factor)
-
-    def get_plant_cost(self):
-        # source: https://www.dvl.org/uploads/tx_ttproducts/datasheet/DVL-Publikation-Schriftenreihe-22_Vom_Landschaftspflegematerial_zum_Biogas-ein_Beratungsordner.pdf
-        # piecewise function, as plants get cheaper once larger than 75 kW
-        default_price_per_kw = 9000
-        factor = (self.get_kw() - 75) / (150 - 75)
-        factor = max(0.0, min(1.0, factor))
-        return (9000 - factor * (9000 - 6500)) * self.get_kw()
-
     def get_color(self):
         if self.plant_type == BiogasPlant.SMALL:
             return "purple"
@@ -368,13 +389,7 @@ class BiogasPlant(Agent):
         else:
             return "red"
 
-    def get_stipend(self):
-        if self.get_kw() <= 50:
-            return 0.27 * self.capacity
-        elif self.get_kw() <= 100:
-            return 0.25 * self.capacity
-        else:
-            return 0.22 * self.capacity
-
     def step(self):
-        self.owner.money_received += self.get_stipend()
+        self.owner.money_received += (
+            self.get_stipend(self.capacity) * self.get_kw(self.capacity) * 24 * 365
+        )
