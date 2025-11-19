@@ -44,6 +44,8 @@ class Farmer(Agent):
         self.contributes_to_biogas_plant = False
         self.biogas_plant = None
         self.money_received = 0.0
+        self.max_willingness_to_build = self.base_willingness_to_build + self.random.uniform(0.1, 0.4)
+        self.max_willingness_to_build = min(1.0, self.max_willingness_to_build)
 
     def step(self):
         """
@@ -110,6 +112,7 @@ class Farmer(Agent):
                 + self.weight_social_build * share_adopted,
             ),
         )
+        self.willingness_to_build = min(self.willingness_to_build, self.max_willingness_to_build)
 
         self.willingness_to_contribute = max(
             0.0,
@@ -157,14 +160,38 @@ class Farmer(Agent):
                     available_lsus -= removed_farmer.farm_size
 
             if BiogasPlant.MIN_SIZE <= available_lsus <= BiogasPlant.MAX_SIZE:
-                calculate_utility(
+                # number of owners = this farmer + the contributors
+                n_owners = 1 + len(contributing_neighbors)
+
+                # simple assumption: annual maintenance ~ 3% of capex
+                plant_capex = BiogasPlant.get_plant_cost(available_lsus)
+                annual_maintenance = 0.03 * plant_capex
+
+                util = calculate_utility(
                     plant_capacity=available_lsus,
                     farmer_farm_size=self.farm_size,
-                    maintenance_costs=0,
+                    maintenance_costs=annual_maintenance,
                     maintenance_interval=1,
-                    n_owners=1,
+                    n_owners=n_owners,
+                    plant_lifetime_years=20,
+                    discount_rate=0.04,
+                    co_owner_penalty=self.model.co_owner_penalty,
+                    profit_scale_chf=100000.0,
                 )
-                self.build_biogas_plant(available_lsus, contributing_neighbors)
+
+                # 1) hard cutoff: don't build if utility is “too bad”
+                if util < self.model.utility_min_threshold:
+                    return
+
+                # 2) translate utility into an additional probability
+                #    (sigmoid: negative utility -> low probability, positive -> high probability)
+                p_utility = 1.0 / (1.0 + math.exp(-self.model.utility_sensitivity * util))
+
+                # combine willingness and utility (multiplicative)
+                p_final = p_utility * max(0.0, min(1.0, self.willingness_to_build))
+
+                if self.random.random() < p_final:
+                    self.build_biogas_plant(available_lsus, contributing_neighbors)
 
     def _decide_whether_to_upgrade_biogas_plant(self):
         p_adopt = max(0.0, min(1.0, self.willingness_to_build**3))
