@@ -93,7 +93,7 @@ def BiogasPaymentControl(model):
     """
 
     def set_payment(v):
-        model.biogas_payment = v
+        model.biogas_payment_shift = v
         force_update()
 
     # Render into the global Sidebar so this control is fixed in the left column
@@ -101,7 +101,7 @@ def BiogasPaymentControl(model):
         with solara.Card("Biogas Payment"):
             solara.SliderFloat(
                 label="Biogas payment per step ($)",
-                value=model.biogas_payment,
+                value=model.biogas_payment_shift,
                 on_value=set_payment,
                 min=0.0,
                 max=1.0,

@@ -17,23 +17,23 @@ class FarmerBiogasModel(Model):
     """
 
     def __init__(
-            self,
-            width=20,
-            height=20,
-            farm_capacity_shift=0,
-            biogas_payment=0.10,
-            learning_rate=0.05,
-            learning_midpoint=35,
-            weight_global_build=0.2,
-            weight_social_build=0.03,
-            weight_global_contribute=0.5,
-            weight_social_contribute=0.1,
-            contribute_threshold=0.4,
-            # NEW:
-            co_owner_penalty=0.1,
-            utility_sensitivity=1.0,
-            utility_min_threshold=0.0,
-            innovator_share=0.05,
+        self,
+        width=20,
+        height=20,
+        farm_capacity_shift=0,
+        biogas_payment_shift=0,
+        learning_rate=0.05,
+        learning_midpoint=35,
+        weight_global_build=0.2,
+        weight_social_build=0.03,
+        weight_global_contribute=0.5,
+        weight_social_contribute=0.1,
+        contribute_threshold=0.4,
+        # NEW:
+        co_owner_penalty=0.1,
+        utility_sensitivity=1.0,
+        utility_min_threshold=0.0,
+        p_innovators=0.05,
     ):
         ...
         self.co_owner_penalty = co_owner_penalty
@@ -43,7 +43,7 @@ class FarmerBiogasModel(Model):
 
         self.width = width
         self.height = height
-        self.biogas_payment = biogas_payment
+        self.biogas_payment_shift = biogas_payment_shift
         # Zeitvariable für Adoption usw.
         self.time = 0
 
@@ -62,9 +62,6 @@ class FarmerBiogasModel(Model):
 
         # Zufalls-Generator
         g = np.random.Generator(np.random.PCG64())
-
-        # Anteil Innovatoren
-        p_innovators = innovator_share
 
         # Einen Farmer pro Zelle
         for x in range(width):

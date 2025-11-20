@@ -44,7 +44,9 @@ class Farmer(Agent):
         self.contributes_to_biogas_plant = False
         self.biogas_plant = None
         self.money_received = 0.0
-        self.max_willingness_to_build = self.base_willingness_to_build + self.random.uniform(0.1, 0.4)
+        self.max_willingness_to_build = (
+            self.base_willingness_to_build + self.random.uniform(0.1, 0.4)
+        )
         self.max_willingness_to_build = min(1.0, self.max_willingness_to_build)
 
     def step(self):
@@ -106,13 +108,12 @@ class Farmer(Agent):
         self.willingness_to_build = max(
             0.0,
             min(
-                1.0,
+                self.max_willingness_to_build,
                 self.base_willingness_to_build
                 + self.weight_global_build * global_learning
                 + self.weight_social_build * share_adopted,
             ),
         )
-        self.willingness_to_build = min(self.willingness_to_build, self.max_willingness_to_build)
 
         self.willingness_to_contribute = max(
             0.0,
@@ -177,6 +178,7 @@ class Farmer(Agent):
                     discount_rate=0.04,
                     co_owner_penalty=self.model.co_owner_penalty,
                     profit_scale_chf=100000.0,
+                    biogas_payment_shift=self.model.biogas_payment_shift,
                 )
 
                 # 1) hard cutoff: don't build if utility is “too bad”
@@ -185,10 +187,15 @@ class Farmer(Agent):
 
                 # 2) translate utility into an additional probability
                 #    (sigmoid: negative utility -> low probability, positive -> high probability)
-                p_utility = 1.0 / (1.0 + math.exp(-self.model.utility_sensitivity * util))
+                p_utility = 1.0 / (
+                    1.0 + math.exp(-self.model.utility_sensitivity * util)
+                )
 
                 # combine willingness and utility (multiplicative)
-                p_final = p_utility * max(0.0, min(1.0, self.willingness_to_build))
+                assert (
+                    1.0 >= self.willingness_to_build >= 0.0
+                ), "Willingness must be in [0,1]"
+                p_final = p_utility * self.willingness_to_build
 
                 if self.random.random() < p_final:
                     self.build_biogas_plant(available_lsus, contributing_neighbors)
@@ -247,6 +254,7 @@ def calculate_utility(
     discount_rate: float = 0.04,
     co_owner_penalty: float = 0.1,  # percentage reduction in utility per co-owner
     profit_scale_chf: float = 100000.0,
+    biogas_payment_shift: float = 0.0,
 ):
 
     if plant_capacity <= 0 or farmer_farm_size <= 0:
@@ -255,7 +263,9 @@ def calculate_utility(
     # annual energy and revenue
     kw = BiogasPlant.get_kw(plant_capacity)
     annual_kwh = kw * 24 * 365
-    annual_revenue_total = annual_kwh * BiogasPlant.get_stipend(plant_capacity)
+    annual_revenue_total = annual_kwh * (
+        BiogasPlant.get_stipend(plant_capacity) + biogas_payment_shift
+    )
 
     # investment costs
     plant_capex_chf = BiogasPlant.get_plant_cost(plant_capacity)
@@ -288,9 +298,6 @@ def calculate_utility(
     utility_co_owners = -co_owner_penalty * float(max(0, n_owners - 1))
 
     total_utility = utility_profit + utility_co_owners
-    print(
-        f"Utility calculation: capacity={plant_capacity}, farm_size={farmer_farm_size}, n_owners={n_owners} -> utility={total_utility:.3f}"
-    )
     return total_utility
 
 
@@ -319,19 +326,6 @@ def get_available_LSUs(neighbors: list):
     return sum(n.farm_size for n in neighbors)
 
 
-# ... (Rest des Codes bleibt gleich) ...
-
-
-def calculate_biogas_plant_return(type, capacity, num_years=20):
-    # could also add in maintenance, etc.
-    if type == BiogasPlant.SMALL:
-        return capacity * 0.27 * num_years
-    elif type == BiogasPlant.MEDIUM:
-        return capacity * 0.25 * num_years
-    elif type == BiogasPlant.LARGE:
-        return capacity * 0.22 * num_years
-
-
 class BiogasPlant(Agent):
     """
     A biogas plant agent that provides payments to its owner.
@@ -346,6 +340,10 @@ class BiogasPlant(Agent):
 
     # source: https://www.euki.de/wp-content/uploads/2021/03/Brochure_Biogas-Initiative_WEB.pdf
     KW_PER_LSU = 18 / 100  # 18 kW per 100 LSUs
+
+    # True is how it's defined in plant pricing references
+    # False does interpolation for any size
+    USE_PIECEWISE_COST_FUNCTION = True
 
     def __init__(self, model, owner, contributors, capacity):
         super().__init__(model)
@@ -376,17 +374,23 @@ class BiogasPlant(Agent):
         # large plants are 30% relatively more efficient
         default_kw = capacity * BiogasPlant.KW_PER_LSU
         factor = (default_kw - 75) / (1000 - 75)
-        factor = max(0.0, min(1.0, factor))
+        if BiogasPlant.USE_PIECEWISE_COST_FUNCTION:
+            factor = max(0.0, min(1.0, factor))
         return default_kw * (1 + 0.3 * factor)
 
     @staticmethod
     def get_plant_cost(capacity):
         # source: https://www.dvl.org/uploads/tx_ttproducts/datasheet/DVL-Publikation-Schriftenreihe-22_Vom_Landschaftspflegematerial_zum_Biogas-ein_Beratungsordner.pdf
-        # piecewise function, as plants get cheaper once larger than 75 kW
-        default_price_per_kw = 9000
-        factor = (BiogasPlant.get_kw(capacity) - 75) / (150 - 75)
-        factor = max(0.0, min(1.0, factor))
-        return (9000 - factor * (9000 - 6500)) * BiogasPlant.get_kw(capacity)
+        # # piecewise function, as plants get cheaper once larger than 75 kW
+        if BiogasPlant.USE_PIECEWISE_COST_FUNCTION:
+            default_price_per_kw = 9000
+            factor = (BiogasPlant.get_kw(capacity) - 75) / (150 - 75)
+            factor = max(0.0, min(1.0, factor))
+            return (9000 - factor * (9000 - 6500)) * BiogasPlant.get_kw(capacity)
+        else:
+            # experimenting here with linear function
+            cost_per_kw = 11500 - BiogasPlant.get_kw(capacity) * 2500 / 75
+            return cost_per_kw * BiogasPlant.get_kw(capacity)
 
     @staticmethod
     def get_stipend(capacity):
@@ -419,5 +423,8 @@ class BiogasPlant(Agent):
 
     def step(self):
         self.owner.money_received += (
-            self.get_stipend(self.capacity) * self.get_kw(self.capacity) * 24 * 365
+            (self.get_stipend(self.capacity) + self.model.biogas_payment_shift)
+            * self.get_kw(self.capacity)
+            * 24
+            * 365
         )
