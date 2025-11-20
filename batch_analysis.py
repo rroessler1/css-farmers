@@ -95,10 +95,13 @@ if __name__ == "__main__":
     # Parameters you want to sweep
     # → just change these lists to try other sensitivities
     variable_ranges = dict(
-        learning_rate=[0.02, 0.05, 0.08, 0.1, 0.2],
-        weight_global_build=[0.2, 0.5, 0.8],
-        contribute_threshold=[0.3, 0.4, 0.5],
-        p_innovators=[0.0, 0.01, 0.05, 0.1, 0.2],
+        # learning_rate=[0.02, 0.05, 0.08, 0.1, 0.2],
+        weight_global_build=[0.2, 0.4, 0.6, 0.8],
+        weight_social_build=[0.2, 0.4, 0.6, 0.8],
+        weight_global_contribute=[0.2, 0.4, 0.6, 0.8],
+        weight_social_contribute=[0.2, 0.4, 0.6, 0.8],
+        contribute_threshold=[0.25, 0.5, 0.75],
+        # p_innovators=[0.0, 0.01, 0.05, 0.1, 0.2],
         # you can add more, e.g.:
         # co_owner_penalty=[0.0, 0.1, 0.2, 0.3],
         # utility_min_threshold=[-0.5, 0.0, 0.5],

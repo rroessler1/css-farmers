@@ -54,7 +54,7 @@ class Farmer(Agent):
         Execute one step of the agent's behavior.
         """
         if self.has_biogas_plant:
-            self._decide_whether_to_upgrade_biogas_plant()
+            # self._decide_whether_to_upgrade_biogas_plant()
             return
 
         # Wenn der Bauer schon Teil einer Anlage ist, muss er nichts mehr tun.
@@ -125,83 +125,110 @@ class Farmer(Agent):
             ),
         )
 
+    def _decide_to_build_individual_plant(self):
+        if self.farm_size < 87:
+            return False
+
+        available_lsus = self.farm_size
+        plant_capex = BiogasPlant.get_plant_cost(available_lsus)
+        annual_maintenance = 0.03 * plant_capex
+
+        util = calculate_utility(
+            plant_capacity=available_lsus,
+            farmer_farm_size=self.farm_size,
+            maintenance_costs=annual_maintenance,
+            maintenance_interval=1,
+            n_owners=1,
+            plant_lifetime_years=20,
+            discount_rate=0.04,
+            co_owner_penalty=self.model.co_owner_penalty,
+            profit_scale_chf=100000.0,
+            biogas_payment_shift=self.model.biogas_payment_shift,
+        )
+
+        # 1) hard cutoff: don't build if utility is “too bad”
+        if util < self.model.utility_min_threshold:
+            return False
+
+        # 2) translate utility into an additional probability
+        #    (sigmoid: negative utility -> low probability, positive -> high probability)
+        p_utility = 1.0 / (1.0 + math.exp(-self.model.utility_sensitivity * util))
+
+        if self.random.random() > p_utility:
+            return False
+
+        self.build_biogas_plant(available_lsus, [])
+        print("Built individual plant with capacity ", available_lsus)
+        return True
+
+    def _decide_to_build_contributing_plant(self):
+        neighbors = self.model.grid.get_neighbors(
+            self.pos,
+            moore=True,
+            include_center=False,
+            radius=2,  # Annahme: Kooperiere nur mit Radius 2
+        )
+        contributing_neighbors = get_neighbors_willing_to_contribute(
+            neighbors, self.model.contribute_threshold
+        )
+        available_lsus = get_available_LSUs(contributing_neighbors) + self.farm_size
+        if available_lsus < 475:
+            return False
+
+        if available_lsus > BiogasPlant.MAX_SIZE:
+            contributing_neighbors = sorted(
+                contributing_neighbors, key=lambda x: x.farm_size, reverse=True
+            )
+            while available_lsus > BiogasPlant.MAX_SIZE and contributing_neighbors:
+                removed_farmer = contributing_neighbors.pop()
+                available_lsus -= removed_farmer.farm_size
+
+        plant_capex = BiogasPlant.get_plant_cost(available_lsus)
+        annual_maintenance = 0.03 * plant_capex
+
+        util = calculate_utility(
+            plant_capacity=available_lsus,
+            farmer_farm_size=self.farm_size,
+            maintenance_costs=annual_maintenance,
+            maintenance_interval=1,
+            n_owners=2,
+            plant_lifetime_years=20,
+            discount_rate=0.04,
+            co_owner_penalty=self.model.co_owner_penalty,
+            profit_scale_chf=100000.0,
+            biogas_payment_shift=self.model.biogas_payment_shift,
+        )
+
+        # 1) hard cutoff: don't build if utility is “too bad”
+        if util < self.model.utility_min_threshold:
+            return False
+
+        # 2) translate utility into an additional probability
+        #    (sigmoid: negative utility -> low probability, positive -> high probability)
+        p_utility = 1.0 / (1.0 + math.exp(-self.model.utility_sensitivity * util))
+
+        if self.random.random() > p_utility:
+            return False
+
+        self.build_biogas_plant(available_lsus, contributing_neighbors)
+        return True
+
     def _decide_whether_to_build_biogas_plant(self):
-        # (Check auf self.contributes_to_biogas_plant ist jetzt im step(),
-        #  also hier nicht mehr nötig)
+        assert 0.0 <= self.willingness_to_build <= 1.0, "Willingness should be in [0,1]"
+        # first try to build a contributing plant
+        if self.random.random() < self.willingness_to_build:
+            built = self._decide_to_build_contributing_plant()
+            if built:
+                return True
 
-        # probabilistic adoption: higher willingness -> higher chance this step
-        p_adopt = max(0.0, min(1.0, self.willingness_to_build**3))
-
-        if self.random.random() > p_adopt:
-            return
-
-        # rest of your capacity / neighbor logic as before
-        if self.model.grid:
-            neighbors = self.model.grid.get_neighbors(
-                self.pos,
-                moore=True,
-                include_center=False,
-                radius=1,  # Annahme: Kooperiere nur mit Radius 1
-            )
-
-            # *** VERBESSERUNG: Übergebe Modell-Parameter statt 0.5 ***
-            threshold = self.model.contribute_threshold
-            contributing_neighbors = get_neighbors_willing_to_contribute(
-                neighbors, threshold
-            )
-
-            available_lsus = get_available_LSUs(contributing_neighbors) + self.farm_size
-
-            if available_lsus > BiogasPlant.MAX_SIZE:
-                contributing_neighbors = sorted(
-                    contributing_neighbors, key=lambda x: x.farm_size, reverse=True
-                )
-                while available_lsus > BiogasPlant.MAX_SIZE and contributing_neighbors:
-                    removed_farmer = contributing_neighbors.pop()
-                    available_lsus -= removed_farmer.farm_size
-
-            if BiogasPlant.MIN_SIZE <= available_lsus <= BiogasPlant.MAX_SIZE:
-                # number of owners = this farmer + the contributors
-                n_owners = 1 + len(contributing_neighbors)
-
-                # simple assumption: annual maintenance ~ 3% of capex
-                plant_capex = BiogasPlant.get_plant_cost(available_lsus)
-                annual_maintenance = 0.03 * plant_capex
-
-                util = calculate_utility(
-                    plant_capacity=available_lsus,
-                    farmer_farm_size=self.farm_size,
-                    maintenance_costs=annual_maintenance,
-                    maintenance_interval=1,
-                    n_owners=n_owners,
-                    plant_lifetime_years=20,
-                    discount_rate=0.04,
-                    co_owner_penalty=self.model.co_owner_penalty,
-                    profit_scale_chf=100000.0,
-                    biogas_payment_shift=self.model.biogas_payment_shift,
-                )
-
-                # 1) hard cutoff: don't build if utility is “too bad”
-                if util < self.model.utility_min_threshold:
-                    return
-
-                # 2) translate utility into an additional probability
-                #    (sigmoid: negative utility -> low probability, positive -> high probability)
-                p_utility = 1.0 / (
-                    1.0 + math.exp(-self.model.utility_sensitivity * util)
-                )
-
-                # combine willingness and utility (multiplicative)
-                assert (
-                    1.0 >= self.willingness_to_build >= 0.0
-                ), "Willingness must be in [0,1]"
-                p_final = p_utility * self.willingness_to_build
-
-                if self.random.random() < p_final:
-                    self.build_biogas_plant(available_lsus, contributing_neighbors)
+        # then try to build an individual plant
+        if self.random.random() < self.willingness_to_build**2:
+            built = self._decide_to_build_individual_plant()
+            return built
+        return
 
     def _decide_whether_to_upgrade_biogas_plant(self):
-        p_adopt = max(0.0, min(1.0, self.willingness_to_build**3))
+        p_adopt = max(0.0, min(1.0, self.willingness_to_build))
         if self.random.random() > p_adopt:
             return
 
@@ -336,7 +363,7 @@ class BiogasPlant(Agent):
     LARGE = 3
 
     MIN_SIZE = 75
-    MAX_SIZE = 850
+    MAX_SIZE = 2000
 
     # source: https://www.euki.de/wp-content/uploads/2021/03/Brochure_Biogas-Initiative_WEB.pdf
     KW_PER_LSU = 18 / 100  # 18 kW per 100 LSUs

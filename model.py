@@ -25,12 +25,12 @@ class FarmerBiogasModel(Model):
         learning_rate=0.05,
         learning_midpoint=35,
         weight_global_build=0.2,
-        weight_social_build=0.03,
+        weight_social_build=0.2,
         weight_global_contribute=0.5,
-        weight_social_contribute=0.1,
-        contribute_threshold=0.4,
+        weight_social_contribute=0.5,
+        contribute_threshold=0.25,
         # NEW:
-        co_owner_penalty=0.1,
+        co_owner_penalty=-2,
         utility_sensitivity=1.0,
         utility_min_threshold=0.0,
         p_innovators=0.05,
@@ -71,9 +71,9 @@ class FarmerBiogasModel(Model):
 
                 # Anfängliche Bereitschaft
                 if g.random() < p_innovators:
-                    base_willingness_build = g.uniform(0.6, 0.9)  # Innovator
+                    base_willingness_build = g.uniform(0.1, 0.3)  # Innovator
                 else:
-                    base_willingness_build = g.uniform(0.0, 0.3)  # Mehrheit
+                    base_willingness_build = g.uniform(0.0, 0.0001)  # Mehrheit
 
                 base_willingness_contrib = max(
                     0.0, min(1.0, base_willingness_build + g.uniform(0.0, 0.2))
@@ -129,6 +129,27 @@ class FarmerBiogasModel(Model):
                     if isinstance(a, Farmer)
                     and a.time_of_adoption is not None
                     and a.time_of_adoption == m.time
+                ),
+                "Avg Num Contributors": lambda m: sum(
+                    len(a.contributors)
+                    for a in m.agents
+                    if isinstance(a, BiogasPlant) and len(a.contributors) > 0
+                )
+                / max(
+                    1,
+                    sum(
+                        1
+                        for a in m.agents
+                        if isinstance(a, BiogasPlant) and len(a.contributors) > 0
+                    ),
+                ),
+                "Percent of Plants with Contributors": lambda m: (
+                    sum(
+                        1
+                        for a in m.agents
+                        if isinstance(a, BiogasPlant) and len(a.contributors) > 0
+                    )
+                    / max(1, sum(1 for a in m.agents if isinstance(a, BiogasPlant)))
                 ),
             },
             agent_reporters={

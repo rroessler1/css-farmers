@@ -117,6 +117,8 @@ page = SolaraViz(
     renderer=None,
     components=[
         make_space_component(agent_portrayal),
+        make_plot_component({"Avg Num Contributors": "blue"}),
+        make_plot_component({"Percent of Plants with Contributors": "blue"}),
         # Plot 1: diffusion curve + its derivative
         make_plot_component(
             {
