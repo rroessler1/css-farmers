@@ -30,7 +30,7 @@ class FarmerBiogasModel(Model):
         weight_social_contribute=0.5,
         contribute_threshold=0.25,
         # NEW:
-        co_owner_penalty=-2,
+        co_owner_penalty=0.1,
         utility_sensitivity=1.0,
         utility_min_threshold=0.0,
         p_innovators=0.05,
@@ -130,27 +130,8 @@ class FarmerBiogasModel(Model):
                     and a.time_of_adoption is not None
                     and a.time_of_adoption == m.time
                 ),
-                "Avg Num Contributors": lambda m: sum(
-                    len(a.contributors)
-                    for a in m.agents
-                    if isinstance(a, BiogasPlant) and len(a.contributors) > 0
-                )
-                / max(
-                    1,
-                    sum(
-                        1
-                        for a in m.agents
-                        if isinstance(a, BiogasPlant) and len(a.contributors) > 0
-                    ),
-                ),
-                "Percent of Plants with Contributors": lambda m: (
-                    sum(
-                        1
-                        for a in m.agents
-                        if isinstance(a, BiogasPlant) and len(a.contributors) > 0
-                    )
-                    / max(1, sum(1 for a in m.agents if isinstance(a, BiogasPlant)))
-                ),
+                "Avg Num Contributors": average_num_contributors,
+                "Percent of Plants with Contributors": percent_plants_with_contributors,
             },
             agent_reporters={
                 "Farm Size": lambda a: a.farm_size if isinstance(a, Farmer) else None,
@@ -180,3 +161,21 @@ def average_cost_per_kw(model):
     tot_cost = sum(a.get_plant_cost(a.capacity) for a in plants)
     tot_kw = sum(a.get_kw(a.capacity) for a in plants)
     return tot_cost / tot_kw if tot_kw > 0 else 0.0
+
+
+def average_num_contributors(model):
+    plants = [
+        a
+        for a in model.agents
+        if isinstance(a, BiogasPlant) and len(a.contributors) > 0
+    ]
+    total_contributors = sum(len(a.contributors) for a in plants)
+    return total_contributors / len(plants) if plants else 0.0
+
+
+def percent_plants_with_contributors(model):
+    plants = [a for a in model.agents if isinstance(a, BiogasPlant)]
+    if not plants:
+        return 0.0
+    num_with_contributors = sum(1 for a in plants if len(a.contributors) > 0)
+    return num_with_contributors / len(plants)

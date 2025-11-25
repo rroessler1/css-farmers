@@ -7,7 +7,12 @@ import itertools
 import pandas as pd
 import tqdm
 
-from model import FarmerBiogasModel, average_cost_per_kw
+from model import (
+    FarmerBiogasModel,
+    average_cost_per_kw,
+    average_num_contributors,
+    percent_plants_with_contributors,
+)
 from agents import Farmer, BiogasPlant
 
 
@@ -50,6 +55,8 @@ def run_one_sim(param_dict, max_steps=80):
         "Num_Plants": num_plants(model),
         "Total_KW": total_kw(model),
         "Average_Cost_per_KW": average_cost_per_kw(model),
+        "Average_Num_Contributors": average_num_contributors(model),
+        "Percent_Plants_with_Contributors": percent_plants_with_contributors(model),
     }
     return row
 
@@ -88,7 +95,6 @@ if __name__ == "__main__":
     fixed_params = dict(
         width=20,
         height=20,
-        farm_capacity_shift=0,
         # you can fix other FarmerBiogasModel defaults here if you want
     )
 
@@ -96,18 +102,20 @@ if __name__ == "__main__":
     # → just change these lists to try other sensitivities
     variable_ranges = dict(
         # learning_rate=[0.02, 0.05, 0.08, 0.1, 0.2],
-        weight_global_build=[0.2, 0.4, 0.6, 0.8],
-        weight_social_build=[0.2, 0.4, 0.6, 0.8],
-        weight_global_contribute=[0.2, 0.4, 0.6, 0.8],
-        weight_social_contribute=[0.2, 0.4, 0.6, 0.8],
-        contribute_threshold=[0.25, 0.5, 0.75],
+        # weight_global_build=[0.2, 0.4, 0.6, 0.8],
+        # weight_social_build=[0.2, 0.4, 0.6, 0.8],
+        # weight_global_contribute=[0.2, 0.4, 0.6, 0.8],
+        # weight_social_contribute=[0.2, 0.4, 0.6, 0.8],
+        # contribute_threshold=[0.25, 0.5, 0.75],
+        biogas_payment_shift=[-0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3],
+        farm_capacity_shift=[-30, -20, -10, 0, 10, 20, 30],
         # p_innovators=[0.0, 0.01, 0.05, 0.1, 0.2],
         # you can add more, e.g.:
         # co_owner_penalty=[0.0, 0.1, 0.2, 0.3],
-        # utility_min_threshold=[-0.5, 0.0, 0.5],
+        # utility_min_threshold=[-0.2, -0.1, 0.0, 0.1, 0.2],
     )
 
-    iterations = 5
+    iterations = 20
     max_steps = 80
 
     # ---- build all parameter combinations ----
@@ -128,5 +136,5 @@ if __name__ == "__main__":
     df = pd.DataFrame(results)
     df.to_csv("batch_results_manual.csv", index=False)
     print("Saved batch_results_manual.csv")
-    print(df.head())
+    print(df)
     plot_all_sensitivities(df, variable_ranges)

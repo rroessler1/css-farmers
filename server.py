@@ -103,8 +103,8 @@ def BiogasPaymentControl(model):
                 label="Biogas payment per step ($)",
                 value=model.biogas_payment_shift,
                 on_value=set_payment,
-                min=0.0,
-                max=1.0,
+                min=-3.0,
+                max=3.0,
                 step=0.05,
             )
 

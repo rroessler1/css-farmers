@@ -130,13 +130,10 @@ class Farmer(Agent):
             return False
 
         available_lsus = self.farm_size
-        plant_capex = BiogasPlant.get_plant_cost(available_lsus)
-        annual_maintenance = 0.03 * plant_capex
 
         util = calculate_utility(
             plant_capacity=available_lsus,
             farmer_farm_size=self.farm_size,
-            maintenance_costs=annual_maintenance,
             maintenance_interval=1,
             n_owners=1,
             plant_lifetime_years=20,
@@ -158,7 +155,6 @@ class Farmer(Agent):
             return False
 
         self.build_biogas_plant(available_lsus, [])
-        print("Built individual plant with capacity ", available_lsus)
         return True
 
     def _decide_to_build_contributing_plant(self):
@@ -183,15 +179,11 @@ class Farmer(Agent):
                 removed_farmer = contributing_neighbors.pop()
                 available_lsus -= removed_farmer.farm_size
 
-        plant_capex = BiogasPlant.get_plant_cost(available_lsus)
-        annual_maintenance = 0.03 * plant_capex
-
         util = calculate_utility(
             plant_capacity=available_lsus,
             farmer_farm_size=self.farm_size,
-            maintenance_costs=annual_maintenance,
             maintenance_interval=1,
-            n_owners=2,
+            n_owners=len(contributing_neighbors) + 1,
             plant_lifetime_years=20,
             discount_rate=0.04,
             co_owner_penalty=self.model.co_owner_penalty,
@@ -274,7 +266,6 @@ class Farmer(Agent):
 def calculate_utility(
     plant_capacity: float,  # in lsu
     farmer_farm_size: float,  # in lsu
-    maintenance_costs: float,  # every x years in chf
     maintenance_interval: int,  # in years
     n_owners: int,
     plant_lifetime_years: int = 20,
@@ -296,6 +287,7 @@ def calculate_utility(
 
     # investment costs
     plant_capex_chf = BiogasPlant.get_plant_cost(plant_capacity)
+    maintenance_costs = 0.03 * plant_capex_chf
 
     # maintenance
     annual_maintenance_total = maintenance_costs / float(max(1, maintenance_interval))
@@ -425,8 +417,10 @@ class BiogasPlant(Agent):
             return 0.27
         elif BiogasPlant.get_kw(capacity) <= 100:
             return 0.25
-        else:
+        elif BiogasPlant.get_kw(capacity) <= 500:
             return 0.22
+        else:
+            return 0.14
 
     def can_upgrade(self, additional_capacity):
         return self.get_size(self.capacity + additional_capacity) > self.plant_type
