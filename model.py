@@ -29,16 +29,16 @@ class FarmerBiogasModel(Model):
         weight_global_contribute=0.5,
         weight_social_contribute=0.1,
         contribute_threshold=0.4,
-        # NEW:
+        # NEW: utility related parameters
         co_owner_penalty=0.1,
         utility_sensitivity=1.0,
         utility_min_threshold=0.0,
+        plant_lifetime_years=20,
+        discount_rate=0.04,
+        profit_scale_chf=100000.0,
         p_innovators=0.05,
     ):
         ...
-        self.co_owner_penalty = co_owner_penalty
-        self.utility_sensitivity = utility_sensitivity
-        self.utility_min_threshold = utility_min_threshold
         super().__init__()
 
         self.width = width
@@ -47,7 +47,7 @@ class FarmerBiogasModel(Model):
         # Zeitvariable für Adoption usw.
         self.time = 0
 
-        # Parameter, auf die Farmer zugreifen
+        # parameters farmers will access
         self.learning_rate = learning_rate
         self.learning_midpoint = learning_midpoint
 
@@ -56,6 +56,14 @@ class FarmerBiogasModel(Model):
         self.weight_global_contribute = weight_global_contribute
         self.weight_social_contribute = weight_social_contribute
         self.contribute_threshold = contribute_threshold
+
+        # storing utility-related parameters
+        self.co_owner_penalty = co_owner_penalty
+        self.utility_sensitivity = utility_sensitivity
+        self.utility_min_threshold = utility_min_threshold
+        self.plant_lifetime_years = plant_lifetime_years
+        self.discount_rate = discount_rate
+        self.profit_scale_chf = profit_scale_chfß
 
         # Grid (kein Scheduler)
         self.grid = MultiGrid(width, height, torus=False)

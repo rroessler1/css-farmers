@@ -174,10 +174,10 @@ class Farmer(Agent):
                     maintenance_costs=annual_maintenance,
                     maintenance_interval=1,
                     n_owners=n_owners,
-                    plant_lifetime_years=20,
-                    discount_rate=0.04,
+                    plant_lifetime_years=self.model.plant_lifetime_years,
+                    discount_rate=self.model.discount_rate,
                     co_owner_penalty=self.model.co_owner_penalty,
-                    profit_scale_chf=100000.0,
+                    profit_scale_chf=self.model.profit_scale_chf,
                     biogas_payment_shift=self.model.biogas_payment_shift,
                 )
 

@@ -102,6 +102,15 @@ if __name__ == "__main__":
         # you can add more, e.g.:
         # co_owner_penalty=[0.0, 0.1, 0.2, 0.3],
         # utility_min_threshold=[-0.5, 0.0, 0.5],
+
+        # NEW: utility sensitivity parameters
+        co_owner_penalty=[0.0, 0.05, 0.1, 0.2],
+        utility_min_threshold=[-0.5, 0.0, 0.5],
+        utility_sensitivity=[0.5, 1.0, 2.0],
+        biogas_payment_shift=[-0.05, 0.0, 0.05],
+        discount_rate=[0.02, 0.04, 0.08],
+        plant_lifetime_years=[15, 20, 25],
+        profit_scale_chf=[50_000.0, 100_000.0, 200_000.0],
     )
 
     iterations = 5

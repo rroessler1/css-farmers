@@ -81,6 +81,61 @@ model_params = {
         "max": 1.0,
         "step": 0.05,
     },
+
+    # NEW: added utility parameters
+    "co_owner_penalty": {
+            "type": "SliderFloat",
+            "value": 0.1,
+            "label": "Co-owner Penalty",
+            "min": 0.0,
+            "max": 0.3,
+            "step": 0.05,
+        },
+
+    "utility_sensitivity": {
+            "type": "SliderFloat",
+            "value": 1.0,
+            "label": "Utility Sensitivity",
+            "min": 0.1,
+            "max": 3.0,
+            "step": 0.1,
+        },
+
+    "utility_min_threshold": {
+            "type": "SliderFloat",
+            "value": 0.0,
+            "label": "Utility Min Threshold",
+            "min": -1.0,
+            "max": 1.0,
+            "step": 0.1,
+        },
+
+    "plant_lifetime_years": {
+        "type": "SliderInt",
+        "value": 20,
+        "label": "Plant Lifetime (years)",
+        "min": 10,
+        "max": 30,
+        "step": 5,
+    },
+
+    "discount_rate": {
+        "type": "SliderFloat",
+        "value": 0.04,
+        "label": "Discount Rate",
+        "min": 0.0,
+        "max": 0.1,
+        "step": 0.01,
+    },
+
+    "profit_scale_chf": {
+        "type": "SliderFloat",
+        "value": 100000.0,
+        "label": "Profit Scale (CHF)",
+        "min": 50000.0,
+        "max": 300000.0,
+        "step": 25000.0,
+    },
 }
 
 
