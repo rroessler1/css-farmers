@@ -380,7 +380,7 @@ class BiogasPlant(Agent):
     def get_size(capacity):
         # This is defined by the paper in Sandrine's group
         # But we could also define based on kW instead
-        if capacity <= 100:
+        if capacity <= 350:
             return BiogasPlant.SMALL
         elif capacity <= 600:
             return BiogasPlant.MEDIUM
