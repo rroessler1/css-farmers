@@ -38,6 +38,26 @@ def total_kw(model):
     agents = list(model.agents)
     return sum(a.get_kw(a.capacity) for a in agents if isinstance(a, BiogasPlant))
 
+def plant_size_counts(model):
+    """Number of plants by size class (small / medium / large)."""
+    agents = list(model.agents)
+    small = sum(
+        1
+        for a in agents
+        if isinstance(a, BiogasPlant) and a.plant_type == BiogasPlant.SMALL
+    )
+    medium = sum(
+        1
+        for a in agents
+        if isinstance(a, BiogasPlant) and a.plant_type == BiogasPlant.MEDIUM
+    )
+    large = sum(
+        1
+        for a in agents
+        if isinstance(a, BiogasPlant) and a.plant_type == BiogasPlant.LARGE
+    )
+    return small, medium, large
+
 
 def run_one_sim(param_dict, max_steps=80):
     """
@@ -49,6 +69,10 @@ def run_one_sim(param_dict, max_steps=80):
     for _ in range(max_steps):
         model.step()
 
+    # neue Auswertungen
+    small, medium, large = plant_size_counts(model)
+
+
     row = {
         **param_dict,  # include parameter values in the result row
         "Final_Cumulative_Adopters": final_cumulative_adopters(model),
@@ -57,26 +81,46 @@ def run_one_sim(param_dict, max_steps=80):
         "Average_Cost_per_KW": average_cost_per_kw(model),
         "Average_Num_Contributors": average_num_contributors(model),
         "Percent_Plants_with_Contributors": percent_plants_with_contributors(model),
+
+        # neu: Anzahl Anlagen nach Grösse
+        "Num_Plants_Small": small,
+        "Num_Plants_Medium": medium,
+        "Num_Plants_Large": large,
+
+
     }
     return row
 
 
+
 def plot_all_sensitivities(df, variable_ranges):
     """
-    Create a sensitivity plot for each variable in variable_ranges.
-    Plots mean of each collected metric vs the parameter values.
+    Create sensitivity plots:
+    - single-metric plots (wie bisher)
+    - plus einen Multi-Plot für die Anlagengrössen (Small/Medium/Large).
     """
     import matplotlib.pyplot as plt
 
-    metrics = [
+    # "normale" Metriken
+    single_metrics = [
         "Final_Cumulative_Adopters",
         "Num_Plants",
         "Total_KW",
         "Average_Cost_per_KW",
     ]
 
+    # Grössen-Metriken (alle zusammen in einem Plot)
+    size_metrics = [
+        "Num_Plants_Small",
+        "Num_Plants_Medium",
+        "Num_Plants_Large",
+        # optional:
+        # "KW_Small", "KW_Medium", "KW_Large",
+    ]
+
+    # ---------- 1) Single-metric Plots (wie vorher) ----------
     for param in variable_ranges.keys():
-        for metric in metrics:
+        for metric in single_metrics:
             plt.figure()
             grouped = df.groupby(param)[metric].mean().reset_index()
             plt.plot(grouped[param], grouped[metric], marker="o")
@@ -89,28 +133,60 @@ def plot_all_sensitivities(df, variable_ranges):
             plt.close()
             print(f"Saved: sensitivity_{metric}_vs_{param}.png")
 
+    # ---------- 2) Gemeinsamer Plot für Anlagengrössen ----------
+    for param in variable_ranges.keys():
+        plt.figure()
+        grouped = df.groupby(param).mean().reset_index()
+
+
+        label_map = {
+            "Num_Plants_Small": "Small plants",
+            "Num_Plants_Medium": "Medium plants",
+            "Num_Plants_Large": "Large plants",
+        }
+
+        for metric in size_metrics:
+            if metric in grouped.columns:
+                plt.plot(
+                    grouped[param],
+                    grouped[metric],
+                    marker="o",
+                    label=label_map.get(metric, metric),
+                )
+
+        plt.xlabel(param)
+        plt.ylabel("Mean number of plants")
+        plt.title(f"Sensitivity of plant size distribution to {param}")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"sensitivity_plant_sizes_vs_{param}.png", dpi=300)
+        plt.show()
+        plt.close()
+        print(f"Saved: sensitivity_plant_sizes_vs_{param}.png")
+
 
 if __name__ == "__main__":
     # Parameters that stay constant across runs
     fixed_params = dict(
         width=20,
         height=20,
-        # you can fix other FarmerBiogasModel defaults here if you want
+
     )
 
-    # Parameters you want to sweep
-    # → just change these lists to try other sensitivities
+    # Parameters  to sweep
+
     variable_ranges = dict(
-        # learning_rate=[0.02, 0.05, 0.08, 0.1, 0.2],
-        # weight_global_build=[0.2, 0.4, 0.6, 0.8],
-        # weight_social_build=[0.2, 0.4, 0.6, 0.8],
-        # weight_global_contribute=[0.2, 0.4, 0.6, 0.8],
-        # weight_social_contribute=[0.2, 0.4, 0.6, 0.8],
-        # contribute_threshold=[0.25, 0.5, 0.75],
+        #learning_rate=[0.02, 0.05, 0.08, 0.1, 0.2,0.3,0.4,0.5,1],
+        #weight_global_build=[0,0.2, 0.4, 0.6, 0.8,1],
+        #weight_social_build=[0,0.2, 0.4, 0.6, 0.8,1],
+        #weight_global_contribute=[0,0.2, 0.4, 0.6, 0.8,1],
+        #weight_social_contribute=[0,0.2, 0.4, 0.6, 0.8,1],
+        #contribute_threshold=[0,0.2, 0.4, 0.6, 0.8,1],
+        #p_innovators=[0,0.02, 0.05, 0.08, 0.1, 0.2,0.3,0.4,0.5,0.8,1],
         # biogas_payment_shift=[-0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3],
         # farm_capacity_shift=[-30, -20, -10, 0, 10, 20, 30],
-        # p_innovators=[0.0, 0.01, 0.05, 0.1, 0.2],
-        co_owner_penalty=[0.0, 0.1, 0.2, 0.3],
+        # contribute_threshold=[0.1, 0.3, 0.5, 0.7,1],
+        learning_midpoint=[5,10, 20, 30, 40, 50, 60, 70, 80]
         # utility_sensitivity=[0.5, 1.0, 2.0],
         # utility_min_threshold=[-0.2, -0.1, 0.0, 0.1, 0.2],
         # plant_lifetime_years=[15, 20, 25],
