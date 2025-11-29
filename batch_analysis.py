@@ -107,12 +107,15 @@ if __name__ == "__main__":
         # weight_global_contribute=[0.2, 0.4, 0.6, 0.8],
         # weight_social_contribute=[0.2, 0.4, 0.6, 0.8],
         # contribute_threshold=[0.25, 0.5, 0.75],
-        biogas_payment_shift=[-0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3],
-        farm_capacity_shift=[-30, -20, -10, 0, 10, 20, 30],
+        # biogas_payment_shift=[-0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3],
+        # farm_capacity_shift=[-30, -20, -10, 0, 10, 20, 30],
         # p_innovators=[0.0, 0.01, 0.05, 0.1, 0.2],
-        # you can add more, e.g.:
-        # co_owner_penalty=[0.0, 0.1, 0.2, 0.3],
+        co_owner_penalty=[0.0, 0.1, 0.2, 0.3],
+        # utility_sensitivity=[0.5, 1.0, 2.0],
         # utility_min_threshold=[-0.2, -0.1, 0.0, 0.1, 0.2],
+        # plant_lifetime_years=[15, 20, 25],
+        # discount_rate=[0.02, 0.04, 0.06],
+        # profit_scale_chf=[50_000.0, 100_000.0, 200_000.0],
     )
 
     iterations = 20

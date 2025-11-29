@@ -29,16 +29,21 @@ class FarmerBiogasModel(Model):
         weight_global_contribute=0.5,
         weight_social_contribute=0.5,
         contribute_threshold=0.25,
-        # NEW:
+        # NEW: utility parameters
         co_owner_penalty=0.1,
         utility_sensitivity=1.0,
         utility_min_threshold=0.0,
+        plant_lifetime_years=20,
+        discount_rate=0.04,
+        profit_scale_chf=100000.0,
         p_innovators=0.05,
     ):
-        ...
         self.co_owner_penalty = co_owner_penalty
         self.utility_sensitivity = utility_sensitivity
         self.utility_min_threshold = utility_min_threshold
+        self.plant_lifetime_years = plant_lifetime_years
+        self.discount_rate = discount_rate
+        self.profit_scale_chf = profit_scale_chf
         super().__init__()
 
         self.width = width
